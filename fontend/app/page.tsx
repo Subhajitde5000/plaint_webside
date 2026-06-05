@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import Navbar from "@/components/Navbar";
+import SharedNavbar from "@/components/Navbar";
 
 /* ═══════════════════════════════════════════════════
    SVG ICONS
@@ -266,7 +266,7 @@ function HeroSection() {
             </p>
 
             <div style={{ display: "flex", gap: "16px", flexWrap: "wrap" }}>
-              <Link href="/plants/monstera" style={{ textDecoration: "none" }}>
+              <Link href={slide.heading === "AI Smart Care" ? "/ai-care" : "/plants/monstera"} style={{ textDecoration: "none" }}>
                 <button id="hero-shop-btn" className="btn-primary">{slide.cta} <ArrowRight /></button>
               </Link>
               <button id="hero-learn-btn" className="btn-outline">Learn More</button>
@@ -775,7 +775,9 @@ function AICareSection() {
                 </div>
               ))}
             </div>
-            <button id="ai-shop-btn" className="btn-primary">Try AI Care Free <ArrowRight /></button>
+            <Link href="/ai-care" style={{ textDecoration: "none" }}>
+              <button id="ai-shop-btn" className="btn-primary">Try AI Care Free <ArrowRight /></button>
+            </Link>
           </div>
         </div>
       </div>
@@ -864,10 +866,10 @@ function Footer() {
               <h4 style={{ fontFamily: "Poppins", fontWeight: 600, fontSize: "15px", marginBottom: "16px" }}>{col.title}</h4>
               <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                 {col.links.map((link) => (
-                  <a key={link} href="#" style={{ fontFamily: "DM Sans", fontSize: "14px", color: "rgba(255,255,255,0.55)", transition: "color 0.2s" }}
+                  <Link key={link} href={link === "AI Care" ? "/ai-care" : "#"} style={{ fontFamily: "DM Sans", fontSize: "14px", color: "rgba(255,255,255,0.55)", transition: "color 0.2s", textDecoration: "none" }}
                     onMouseEnter={(e) => (e.currentTarget.style.color = "white")}
                     onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(255,255,255,0.55)")}
-                  >{link}</a>
+                  >{link}</Link>
                 ))}
               </div>
             </div>
@@ -899,7 +901,7 @@ function Footer() {
 export default function Home() {
   return (
     <>
-      <Navbar cartCount={3} />
+      <SharedNavbar cartCount={3} />
       <main>
         <HeroSection />
         <CategoriesSection />

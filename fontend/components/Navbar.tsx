@@ -2,272 +2,263 @@
 
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
-function LeafIcon({ size = 24, color = "#2D5A27" }: { size?: number; color?: string }) {
+/* ── Icons ── */
+function LeafLogo() {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <path d="M12 2C12 2 4 5 4 13C4 17.4 7.6 21 12 21C16.4 21 20 17.4 20 13C20 5 12 2 12 2Z" fill={color} opacity="0.9" />
+    <svg width="26" height="26" viewBox="0 0 24 24" fill="none">
+      <path d="M12 2C12 2 4 5 4 13C4 17.4 7.6 21 12 21C16.4 21 20 17.4 20 13C20 5 12 2 12 2Z" fill="#00b566" />
       <path d="M12 21V10" stroke="white" strokeWidth="1.5" strokeLinecap="round" />
       <path d="M12 15L8 11" stroke="white" strokeWidth="1.2" strokeLinecap="round" />
       <path d="M12 12L16 8" stroke="white" strokeWidth="1.2" strokeLinecap="round" />
     </svg>
   );
 }
-
 function SearchIcon() {
   return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-      <circle cx="11" cy="11" r="8" />
-      <line x1="21" y1="21" x2="16.65" y2="16.65" />
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
     </svg>
   );
 }
-
 function CartIcon() {
   return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="9" cy="21" r="1" />
-      <circle cx="20" cy="21" r="1" />
+    <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="9" cy="21" r="1" /><circle cx="20" cy="21" r="1" />
       <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
     </svg>
   );
 }
-
-function ChevronDown() {
+function UserIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
+    </svg>
+  );
+}
+function ChevDown() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
       <polyline points="6 9 12 15 18 9" />
     </svg>
   );
 }
 
-interface NavbarProps {
+/* ── NAV LINKS config ── */
+const NAV_LINKS = [
+  { label: "Home",     href: "/",        exact: true },
+  { label: "Plants",   href: "/plants/monstera", dropdown: ["Indoor Plants", "Flower Plants", "Succulents", "Balcony Decor"] },
+  { label: "Products", href: "#",        dropdown: ["Seeds", "Soil & Compost", "Tools", "Fertilizer"] },
+  { label: "🤖 AI Care", href: "/ai-care" },
+  { label: "About",    href: "#" },
+];
+
+interface SharedNavbarProps {
   cartCount?: number;
 }
 
-export default function Navbar({ cartCount = 3 }: NavbarProps) {
-  const [scrolled, setScrolled] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [plantsOpen, setPlantsOpen] = useState(false);
-  const [productsOpen, setProductsOpen] = useState(false);
-  const [searchOpen, setSearchOpen] = useState(false);
+export default function SharedNavbar({ cartCount = 0 }: SharedNavbarProps) {
+  const pathname = usePathname();
+  const [scrolled,    setScrolled]    = useState(false);
+  const [menuOpen,    setMenuOpen]    = useState(false);
+  const [openDropdown, setOpenDropdown] = useState<string | null>(null);
+  const [searchOpen,  setSearchOpen]  = useState(false);
   const [searchValue, setSearchValue] = useState("");
-  const searchInputRef = useRef<HTMLInputElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const navbarRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
-    const handler = () => setScrolled(window.scrollY > 10);
-    window.addEventListener("scroll", handler);
-    return () => window.removeEventListener("scroll", handler);
+    const h = () => setScrolled(window.scrollY > 8);
+    window.addEventListener("scroll", h, { passive: true });
+    return () => window.removeEventListener("scroll", h);
   }, []);
 
   useEffect(() => {
-    if (searchOpen) {
-      requestAnimationFrame(() => searchInputRef.current?.focus());
-    }
+    if (searchOpen) searchRef.current?.focus();
   }, [searchOpen]);
 
-  // sync local cart count with storage and events
-  const [localCartCount, setLocalCartCount] = useState<number>(() => {
-    try {
-      const v = typeof window !== "undefined" ? window.localStorage.getItem("cartCount") : null;
-      const n = v ? Number(v) : NaN;
-      return Number.isFinite(n) ? n : cartCount;
-    } catch (e) {
-      return cartCount;
-    }
-  });
-
+  /* Close dropdown on outside click */
   useEffect(() => {
-    const onCart = (e: any) => {
-      const newCount = typeof e?.detail === "number" ? e.detail : (typeof window !== "undefined" ? Number(window.localStorage.getItem("cartCount") || 0) : localCartCount);
-      setLocalCartCount(Number.isFinite(newCount) ? newCount : 0);
+    const h = (event: MouseEvent) => {
+      if (!navbarRef.current) return;
+      if (event.target instanceof Node && navbarRef.current.contains(event.target)) return;
+      setOpenDropdown(null);
     };
-    window.addEventListener("cart:changed", onCart as EventListener);
-    return () => window.removeEventListener("cart:changed", onCart as EventListener);
-  }, [localCartCount]);
+    document.addEventListener("click", h);
+    return () => document.removeEventListener("click", h);
+  }, []);
+
+  const isActive = (href: string, exact?: boolean) => {
+    if (exact) return pathname === href;
+    return pathname.startsWith(href) && href !== "/";
+  };
 
   return (
-    <nav
-      id="navbar"
+    <header
+      id="main-navbar"
+      ref={navbarRef}
       style={{
-        position: "fixed",
-        top: 0, left: 0, right: 0,
-        zIndex: 100,
+        position: "fixed", top: 0, left: 0, right: 0, zIndex: 200,
         background: "white",
-        boxShadow: scrolled ? "0 2px 20px rgba(45,90,39,0.10)" : "none",
-        borderBottom: scrolled ? "none" : "1px solid rgba(168,197,160,0.2)",
-        transition: "box-shadow 0.3s ease",
-        height: "68px",
+        boxShadow: scrolled ? "0 2px 20px rgba(0,0,0,0.08)" : "none",
+        borderBottom: scrolled ? "none" : "1px solid rgba(0,181,102,0.12)",
+        transition: "box-shadow 250ms, border-color 250ms",
+        height: "64px",
         display: "flex",
         alignItems: "center",
+        fontFamily: "Outfit, sans-serif",
       }}
     >
-      <div className="container" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%" }}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap');
+        #main-navbar * { box-sizing: border-box; }
+        #main-navbar :focus-visible { outline: 2px solid #00b566 !important; outline-offset: 2px !important; }
+        .snav-desktop { display: flex; }
+        .snav-hamburger { display: none !important; }
+        @media (max-width: 768px) {
+          .snav-desktop { display: none !important; }
+          .snav-hamburger { display: flex !important; }
+          .snav-search-expand { display: none !important; }
+        }
+      `}</style>
+
+      <div style={{ maxWidth: "1280px", margin: "0 auto", padding: "0 48px", display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%" }} className="snav-inner">
+
         {/* Logo */}
-        <a href="/" id="logo-link" style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-          <LeafIcon size={28} />
-          <span style={{ fontFamily: "Poppins, sans-serif", fontWeight: 700, fontSize: "22px", color: "var(--color-green-dark)" }}>Hero</span>
-        </a>
+        <Link href="/" style={{ display: "flex", alignItems: "center", gap: "9px", textDecoration: "none" }}>
+          <LeafLogo />
+          <span style={{ fontWeight: 700, fontSize: "20px", color: "#1c1c1c", letterSpacing: "-0.3px" }}>plant byst</span>
+        </Link>
 
-        {/* Desktop Nav */}
-        <div style={{ display: "flex", alignItems: "center", gap: "36px" }} className="desktop-nav">
-          <div style={{ position: "relative" }}>
-            <button
-              id="nav-plants"
-              aria-expanded={plantsOpen}
-              aria-controls="plants-menu"
-              onClick={() => setPlantsOpen((prev) => !prev)}
-              style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: "Poppins, sans-serif", fontWeight: 500, fontSize: "15px", color: "var(--color-text-primary)", display: "flex", alignItems: "center", gap: "4px", transition: "color 0.2s" }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = "var(--color-green-mid)")}
-              onMouseLeave={(e) => (e.currentTarget.style.color = "var(--color-text-primary)")}
-            >
-              Plants <ChevronDown />
-            </button>
-
-            {plantsOpen && (
-              <div
-                id="plants-menu"
-                style={{ position: "absolute", top: "32px", left: 0, minWidth: "200px", background: "white", borderRadius: "12px", boxShadow: "0 12px 28px rgba(0,0,0,0.12)", padding: "10px", display: "flex", flexDirection: "column", gap: "6px", zIndex: 120 }}
-              >
-                {["Indoor Plants", "Flower Plants", "Succulents", "Balcony Decor"].map((item) => (
-                  <a
-                    key={item}
-                    href="#"
-                    style={{ fontFamily: "DM Sans", fontSize: "14px", color: "var(--color-text-primary)", padding: "8px 10px", borderRadius: "8px", transition: "background 0.2s" }}
-                    onMouseEnter={(e) => (e.currentTarget.style.background = "var(--color-bg-secondary)")}
-                    onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-                    onClick={() => setPlantsOpen(false)}
+        {/* Desktop nav */}
+        <nav className="snav-desktop" style={{ alignItems: "center", gap: "6px" }}>
+          {NAV_LINKS.map((link) => {
+            const active = isActive(link.href, link.exact);
+            if (link.dropdown) {
+              const open = openDropdown === link.label;
+              return (
+                  <div
+                    key={link.label}
+                    style={{ position: "relative" }}
+                    onMouseEnter={() => setOpenDropdown(link.label)}
+                    onMouseLeave={() => setOpenDropdown((current) => (current === link.label ? null : current))}
                   >
-                    {item}
-                  </a>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div
-            style={{ position: "relative" }}
-            onMouseEnter={() => setProductsOpen(true)}
-            onMouseLeave={() => setProductsOpen(false)}
-          >
-            <a
-              href="#"
-              id="nav-products"
-              style={{ fontFamily: "Poppins, sans-serif", fontWeight: 500, fontSize: "15px", color: "var(--color-text-primary)", display: "flex", alignItems: "center", gap: "4px", transition: "color 0.2s" }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = "var(--color-green-mid)")}
-              onMouseLeave={(e) => (e.currentTarget.style.color = "var(--color-text-primary)")}
-            >
-              Products
-            </a>
-
-            {productsOpen && (
-              <div
-                id="products-menu"
-                style={{ position: "absolute", top: "32px", left: 0, background: "white", borderRadius: "12px", boxShadow: "0 12px 28px rgba(0,0,0,0.12)", padding: "10px 12px", display: "flex", alignItems: "center", gap: "12px", zIndex: 120, whiteSpace: "nowrap" }}
-              >
-                {["All Products", "Seeds", "Soil", "Tools", "Fertilizer"].map((item) => (
-                  <a
-                    key={item}
-                    href="#"
-                    style={{ fontFamily: "DM Sans", fontSize: "14px", color: "var(--color-text-primary)", padding: "6px 10px", borderRadius: "999px", transition: "background 0.2s" }}
-                    onMouseEnter={(e) => (e.currentTarget.style.background = "var(--color-bg-secondary)")}
-                    onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                  <button
+                      onClick={(e) => { e.stopPropagation(); setOpenDropdown(open ? null : link.label); }}
+                    style={{
+                      display: "flex", alignItems: "center", gap: "4px",
+                      background: "none", border: "none", cursor: "pointer",
+                      fontFamily: "Outfit, sans-serif", fontWeight: active ? 600 : 500, fontSize: "14px",
+                      color: active ? "#00b566" : "#1c1c1c",
+                      padding: "8px 12px", borderRadius: "8px",
+                      transition: "color 200ms, background 200ms",
+                      borderBottom: active ? "2px solid #00b566" : "2px solid transparent",
+                    }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(0,181,102,0.06)"; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "none"; }}
                   >
-                    {item}
-                  </a>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {["Supplies", "AI Care"].map((label) => (
-            <a key={label} href="#" id={`nav-${label.toLowerCase().replace(" ", "-")}`}
-              style={{ fontFamily: "Poppins, sans-serif", fontWeight: 500, fontSize: "15px", color: "var(--color-text-primary)", display: "flex", alignItems: "center", gap: "4px", transition: "color 0.2s" }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = "var(--color-green-mid)")}
-              onMouseLeave={(e) => (e.currentTarget.style.color = "var(--color-text-primary)")}
-            >
-              {label}
-            </a>
-          ))}
-        </div>
+                    {link.label} <ChevDown />
+                  </button>
+                  {open && (
+                    <div onClick={(e) => e.stopPropagation()} style={{ position: "absolute", top: "calc(100% + 6px)", left: 0, background: "white", borderRadius: "12px", boxShadow: "0 12px 32px rgba(0,0,0,0.12)", padding: "8px", minWidth: "220px", zIndex: 300, border: "1px solid rgba(0,181,102,0.12)" }}>
+                      <div style={{ display: "flex", gap: "8px", alignItems: "center", padding: "6px" }}>
+                        {link.dropdown.map((item) => (
+                          <Link key={item} href="#" onClick={() => setOpenDropdown(null)}
+                            style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "8px 12px", borderRadius: "8px", fontSize: "14px", color: "#1c1c1c", textDecoration: "none", transition: "background 150ms" }}
+                            onMouseEnter={(e) => ((e.currentTarget as HTMLAnchorElement).style.background = "rgba(0,181,102,0.07)")}
+                            onMouseLeave={(e) => ((e.currentTarget as HTMLAnchorElement).style.background = "transparent")}
+                          >{item}</Link>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            }
+            return (
+              <Link key={link.label} href={link.href}
+                style={{
+                  fontFamily: "Outfit, sans-serif", fontWeight: active ? 600 : 500, fontSize: "14px",
+                  color: active ? "#00b566" : "#1c1c1c",
+                  textDecoration: "none",
+                  padding: "8px 12px", borderRadius: "8px",
+                  borderBottom: active ? "2px solid #00b566" : "2px solid transparent",
+                  transition: "color 200ms, background 200ms",
+                }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.background = "rgba(0,181,102,0.06)"; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.background = "transparent"; }}
+              >
+                {link.label}
+              </Link>
+            );
+          })}
+        </nav>
 
         {/* Actions */}
-        <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-          <div className="nav-search-wrap" style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <div
-              className="nav-search-field"
-              style={{
-                width: searchOpen ? "220px" : "0px",
-                opacity: searchOpen ? 1 : 0,
-                overflow: "hidden",
-                pointerEvents: searchOpen ? "auto" : "none",
-                transition: "width 0.2s ease, opacity 0.2s ease",
-              }}
-            >
-              <div style={{ background: "white", border: "1px solid var(--color-green-light)", borderRadius: "999px", padding: "6px 12px", boxShadow: "0 8px 20px rgba(45,90,39,0.12)", boxSizing: "border-box" }}>
-                <input
-                  id="nav-search-input"
-                  ref={searchInputRef}
-                  type="text"
-                  placeholder="Search plants, seeds, supplies"
-                  value={searchValue}
-                  onChange={(e) => setSearchValue(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Escape") setSearchOpen(false); }}
-                  style={{ width: "100%", background: "transparent", border: "none", outline: "none", fontFamily: "DM Sans, sans-serif", fontSize: "14px", color: "var(--color-text-primary)" }}
+        <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+          {/* Search expand */}
+          <div className="snav-search-expand" style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            {searchOpen && (
+              <div style={{ background: "white", border: "1px solid rgba(0,181,102,0.4)", borderRadius: "9999px", padding: "6px 14px", boxShadow: "0 4px 16px rgba(0,181,102,0.12)", display: "flex", alignItems: "center", gap: "8px" }}>
+                <SearchIcon />
+                <input ref={searchRef} value={searchValue} onChange={(e) => setSearchValue(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Escape") { setSearchOpen(false); setSearchValue(""); } }}
+                  placeholder="Search plants, seeds..." aria-label="Search"
+                  style={{ width: "180px", border: "none", outline: "none", fontFamily: "Outfit, sans-serif", fontSize: "14px", color: "#1c1c1c", background: "transparent" }}
                 />
+                <button onClick={() => { setSearchOpen(false); setSearchValue(""); }} style={{ background: "none", border: "none", cursor: "pointer", fontSize: "14px", color: "rgba(28,28,28,0.4)", padding: "0 2px" }}>✕</button>
               </div>
-            </div>
-
-            <button
-              id="search-btn"
-              aria-expanded={searchOpen}
-              aria-controls="nav-search-input"
-              onClick={() => setSearchOpen((prev) => !prev)}
-              style={{ background: "var(--color-bg-secondary)", border: "none", borderRadius: "50%", width: "40px", height: "40px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "var(--color-green-dark)", transition: "background 0.2s" }}
-              onMouseEnter={(e) => ((e.currentTarget as HTMLButtonElement).style.background = "var(--color-green-pale)")}
-              onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.background = "var(--color-bg-secondary)")}
-            >
-              <SearchIcon />
-            </button>
+            )}
+            <button onClick={() => setSearchOpen(v => !v)} aria-label="Search"
+              style={{ width: "38px", height: "38px", borderRadius: "50px", border: "none", background: "transparent", cursor: "pointer", color: "#1c1c1c", display: "flex", alignItems: "center", justifyContent: "center", transition: "background 200ms" }}
+              onMouseEnter={(e) => ((e.currentTarget as HTMLButtonElement).style.background = "rgba(0,181,102,0.08)")}
+              onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.background = "transparent")}
+            ><SearchIcon /></button>
           </div>
 
-          <button id="cart-btn" style={{ background: "none", border: "none", cursor: "pointer", position: "relative", color: "var(--color-green-dark)", padding: "4px" }}>
+          {/* User */}
+          <button aria-label="Account"
+            style={{ width: "38px", height: "38px", borderRadius: "50px", border: "none", background: "transparent", cursor: "pointer", color: "#1c1c1c", display: "flex", alignItems: "center", justifyContent: "center", transition: "background 200ms" }}
+            onMouseEnter={(e) => ((e.currentTarget as HTMLButtonElement).style.background = "rgba(0,181,102,0.08)")}
+            onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.background = "transparent")}
+          ><UserIcon /></button>
+
+          {/* Cart */}
+          <button aria-label={`Cart, ${cartCount} item${cartCount !== 1 ? "s" : ""}`}
+            style={{ position: "relative", width: "38px", height: "38px", borderRadius: "50px", border: "none", background: "transparent", cursor: "pointer", color: "#1c1c1c", display: "flex", alignItems: "center", justifyContent: "center", transition: "background 200ms" }}
+            onMouseEnter={(e) => ((e.currentTarget as HTMLButtonElement).style.background = "rgba(0,181,102,0.08)")}
+            onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.background = "transparent")}
+          >
             <CartIcon />
-            <span style={{ position: "absolute", top: "-4px", right: "-4px", background: "#E53E3E", color: "white", fontSize: "11px", fontWeight: 700, width: "18px", height: "18px", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "Poppins, sans-serif" }}>{localCartCount}</span>
+            {cartCount > 0 && (
+              <span style={{ position: "absolute", top: "3px", right: "3px", background: "#00b566", color: "white", fontSize: "9px", fontWeight: 700, width: "15px", height: "15px", borderRadius: "9999px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                {cartCount > 9 ? "9+" : cartCount}
+              </span>
+            )}
           </button>
 
-          <button
-            id="user-btn"
-            aria-label="Account"
-            style={{ background: "var(--color-bg-secondary)", border: "none", borderRadius: "50%", width: "40px", height: "40px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "var(--color-green-dark)", fontSize: "18px", transition: "background 0.2s" }}
-            onMouseEnter={(e) => ((e.currentTarget as HTMLButtonElement).style.background = "var(--color-green-pale)")}
-            onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.background = "var(--color-bg-secondary)")}
+          {/* Hamburger */}
+          <button className="snav-hamburger" onClick={() => setMenuOpen(v => !v)} aria-label="Open menu"
+            style={{ flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "4px", width: "38px", height: "38px", borderRadius: "50px", border: "none", background: "transparent", cursor: "pointer" }}
           >
-            👤
-          </button>
-
-          <button id="hamburger-btn" className="hamburger" onClick={() => setMenuOpen(!menuOpen)}
-            style={{ background: "none", border: "none", cursor: "pointer", display: "none", flexDirection: "column", gap: "5px", padding: "4px" }}
-          >
-            {[0, 1, 2].map((i) => (<span key={i} style={{ display: "block", width: "22px", height: "2px", background: "var(--color-green-dark)", borderRadius: "2px" }} />))}
+            {[0,1,2].map(i => (
+              <span key={i} style={{ display: "block", width: "18px", height: "2px", background: "#1c1c1c", borderRadius: "2px", transition: "transform 200ms", transform: menuOpen && i === 0 ? "rotate(45deg) translate(4px,4px)" : menuOpen && i === 2 ? "rotate(-45deg) translate(4px,-4px)" : menuOpen && i === 1 ? "opacity 0" : "none" }} />
+            ))}
           </button>
         </div>
       </div>
 
+      {/* Mobile drawer */}
       {menuOpen && (
-        <div style={{ position: "absolute", top: "68px", left: 0, right: 0, background: "white", boxShadow: "0 8px 24px rgba(0,0,0,0.1)", padding: "16px 24px", display: "flex", flexDirection: "column", gap: "16px", animation: "fadeSlideUp 0.2s ease" }}>
-          {["Plants", "Products", "Supplies", "AI Care"].map((item) => (
-            <a key={item} href="#" style={{ fontFamily: "Poppins", fontWeight: 500, fontSize: "16px", color: "var(--color-text-primary)", padding: "8px 0", borderBottom: "1px solid var(--color-bg-secondary)" }}>{item}</a>
+        <div style={{ position: "absolute", top: "64px", left: 0, right: 0, background: "white", boxShadow: "0 12px 32px rgba(0,0,0,0.10)", padding: "16px 24px 24px", display: "flex", flexDirection: "column", gap: "4px", borderTop: "1px solid rgba(0,181,102,0.12)", zIndex: 190 }}>
+          {NAV_LINKS.map((link) => (
+            <Link key={link.label} href={link.href} onClick={() => setMenuOpen(false)}
+              style={{ display: "block", padding: "12px 8px", fontFamily: "Outfit, sans-serif", fontWeight: 500, fontSize: "16px", color: isActive(link.href, link.exact) ? "#00b566" : "#1c1c1c", textDecoration: "none", borderBottom: "1px solid rgba(0,181,102,0.08)", transition: "color 200ms" }}
+            >{link.label}</Link>
           ))}
         </div>
       )}
-
-      <style>{`
-        @media (max-width: 768px) {
-          .desktop-nav { display: none !important; }
-          .hamburger { display: flex !important; }
-        }
-      `}</style>
-    </nav>
+    </header>
   );
 }
