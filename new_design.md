@@ -103,9 +103,10 @@
 | **Background** | White `#FFFFFF` with subtle bottom border or no border (transparent scroll) |
 | **Height** | 64–72px |
 | **Logo** | Leaf SVG icon + "Hero" text, dark green |
-| **Nav Links** | `Plants ▾` (dropdown), `Supplies`, `AI Care` — Medium 500 |
-| **Search Icon** | 🔍 circular icon button |
+| **Nav Links** | `Plants ▾` opens a click-to-toggle dropdown menu (Indoor Plants, Flower Plants, Succulents, Balcony Decor); `Products` shows a hover dropdown list in a single horizontal row (All Products, Seeds, Soil, Tools, Fertilizer); plus `Supplies`, `AI Care` — Medium 500 |
+| **Search Button** | 🔍 circular icon button that toggles a compact input; expands left to ~200–220px, auto-focus on open, close on Escape or second click |
 | **Cart Icon** | 🛒 with red notification badge showing item count |
+| **User Icon** | 👤 circular icon button for account access |
 | **Sticky** | Yes — fixed to top on scroll |
 | **Mobile** | Hamburger menu (☰) |
 

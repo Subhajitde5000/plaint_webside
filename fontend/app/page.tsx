@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import Image from "next/image";
+import Link from "next/link";
+import Navbar from "@/components/Navbar";
 
 /* ═══════════════════════════════════════════════════
    SVG ICONS
@@ -99,94 +101,7 @@ function LeafShape({ color = "#A8C5A0", width = 40, height = 55, rotate = 0, opa
   );
 }
 
-/* ═══════════════════════════════════════════════════
-   NAVIGATION
-═══════════════════════════════════════════════════ */
-function Navbar() {
-  const [scrolled, setScrolled] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [cartCount] = useState(3);
 
-  useEffect(() => {
-    const handler = () => setScrolled(window.scrollY > 10);
-    window.addEventListener("scroll", handler);
-    return () => window.removeEventListener("scroll", handler);
-  }, []);
-
-  return (
-    <nav
-      id="navbar"
-      style={{
-        position: "fixed",
-        top: 0, left: 0, right: 0,
-        zIndex: 100,
-        background: "white",
-        boxShadow: scrolled ? "0 2px 20px rgba(45,90,39,0.10)" : "none",
-        borderBottom: scrolled ? "none" : "1px solid rgba(168,197,160,0.2)",
-        transition: "box-shadow 0.3s ease",
-        height: "68px",
-        display: "flex",
-        alignItems: "center",
-      }}
-    >
-      <div className="container" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%" }}>
-        {/* Logo */}
-        <a href="#" id="logo-link" style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-          <LeafIcon size={28} />
-          <span style={{ fontFamily: "Poppins, sans-serif", fontWeight: 700, fontSize: "22px", color: "var(--color-green-dark)" }}>Hero</span>
-        </a>
-
-        {/* Desktop Nav */}
-        <div style={{ display: "flex", alignItems: "center", gap: "36px" }} className="desktop-nav">
-          {[{ label: "Plants", dropdown: true }, { label: "Supplies", dropdown: false }, { label: "AI Care", dropdown: false }].map((item) => (
-            <a key={item.label} href="#" id={`nav-${item.label.toLowerCase().replace(" ", "-")}`}
-              style={{ fontFamily: "Poppins, sans-serif", fontWeight: 500, fontSize: "15px", color: "var(--color-text-primary)", display: "flex", alignItems: "center", gap: "4px", transition: "color 0.2s" }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = "var(--color-green-mid)")}
-              onMouseLeave={(e) => (e.currentTarget.style.color = "var(--color-text-primary)")}
-            >
-              {item.label}{item.dropdown && <ChevronDown />}
-            </a>
-          ))}
-        </div>
-
-        {/* Actions */}
-        <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-          <button id="search-btn"
-            style={{ background: "var(--color-bg-secondary)", border: "none", borderRadius: "50%", width: "40px", height: "40px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "var(--color-green-dark)", transition: "background 0.2s" }}
-            onMouseEnter={(e) => ((e.currentTarget as HTMLButtonElement).style.background = "var(--color-green-pale)")}
-            onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.background = "var(--color-bg-secondary)")}
-          ><SearchIcon /></button>
-
-          <button id="cart-btn" style={{ background: "none", border: "none", cursor: "pointer", position: "relative", color: "var(--color-green-dark)", padding: "4px" }}>
-            <CartIcon />
-            <span style={{ position: "absolute", top: "-4px", right: "-4px", background: "#E53E3E", color: "white", fontSize: "11px", fontWeight: 700, width: "18px", height: "18px", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "Poppins, sans-serif" }}>{cartCount}</span>
-          </button>
-
-          <button id="hamburger-btn" className="hamburger" onClick={() => setMenuOpen(!menuOpen)}
-            style={{ background: "none", border: "none", cursor: "pointer", display: "none", flexDirection: "column", gap: "5px", padding: "4px" }}
-          >
-            {[0, 1, 2].map((i) => (<span key={i} style={{ display: "block", width: "22px", height: "2px", background: "var(--color-green-dark)", borderRadius: "2px" }} />))}
-          </button>
-        </div>
-      </div>
-
-      {menuOpen && (
-        <div style={{ position: "absolute", top: "68px", left: 0, right: 0, background: "white", boxShadow: "0 8px 24px rgba(0,0,0,0.1)", padding: "16px 24px", display: "flex", flexDirection: "column", gap: "16px", animation: "fadeSlideUp 0.2s ease" }}>
-          {["Plants", "Supplies", "AI Care"].map((item) => (
-            <a key={item} href="#" style={{ fontFamily: "Poppins", fontWeight: 500, fontSize: "16px", color: "var(--color-text-primary)", padding: "8px 0", borderBottom: "1px solid var(--color-bg-secondary)" }}>{item}</a>
-          ))}
-        </div>
-      )}
-
-      <style>{`
-        @media (max-width: 768px) {
-          .desktop-nav { display: none !important; }
-          .hamburger { display: flex !important; }
-        }
-      `}</style>
-    </nav>
-  );
-}
 
 /* ═══════════════════════════════════════════════════
    HERO SECTION — per-slide unique right-column visuals
@@ -351,7 +266,9 @@ function HeroSection() {
             </p>
 
             <div style={{ display: "flex", gap: "16px", flexWrap: "wrap" }}>
-              <button id="hero-shop-btn" className="btn-primary">{slide.cta} <ArrowRight /></button>
+              <Link href="/plants/monstera" style={{ textDecoration: "none" }}>
+                <button id="hero-shop-btn" className="btn-primary">{slide.cta} <ArrowRight /></button>
+              </Link>
               <button id="hero-learn-btn" className="btn-outline">Learn More</button>
             </div>
 
@@ -484,6 +401,19 @@ function CategoriesSection() {
     setActiveDot(Math.min(idx, categories.length - 1));
   };
 
+  const addToCart = (qty = 1) => {
+    try {
+      const cur = typeof window !== "undefined" ? Number(window.localStorage.getItem("cartCount") || 0) : 0;
+      const next = cur + qty;
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem("cartCount", String(next));
+        window.dispatchEvent(new CustomEvent("cart:changed", { detail: next }));
+      }
+    } catch (e) {
+      // ignore
+    }
+  };
+
   return (
     <section id="categories-section" style={{ background: "var(--color-bg-secondary)", padding: "var(--space-xl) 0", position: "relative", overflow: "hidden" }}>
       <div style={{ position: "absolute", top: "10%", left: "2%", opacity: 0.15 }}><LeafShape color="#4A7C40" width={80} height={110} rotate={-20} opacity={1} /></div>
@@ -506,8 +436,9 @@ function CategoriesSection() {
           style={{ display: "flex", gap: "24px", overflowX: "auto", scrollSnapType: "x mandatory", scrollbarWidth: "none", msOverflowStyle: "none", paddingBottom: "8px" }}
         >
           {categories.map((cat) => (
-            <div key={cat.id} id={`cat-card-${cat.id}`}
-              style={{ minWidth: "280px", maxWidth: "300px", background: "var(--color-white)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-card)", overflow: "hidden", scrollSnapAlign: "start", flex: "0 0 auto", cursor: "pointer", transition: "transform 0.25s ease, box-shadow 0.25s ease" }}
+            <Link key={cat.id} href={`/plants/${cat.id}`} style={{ textDecoration: "none", flex: "0 0 auto" }}>
+            <div id={`cat-card-${cat.id}`}
+              style={{ minWidth: "280px", maxWidth: "300px", background: "var(--color-white)", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-card)", overflow: "hidden", scrollSnapAlign: "start", cursor: "pointer", transition: "transform 0.25s ease, box-shadow 0.25s ease" }}
               onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.transform = "scale(1.03) translateY(-4px)"; (e.currentTarget as HTMLDivElement).style.boxShadow = "0 16px 48px rgba(45,90,39,0.18)"; }}
               onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.transform = "scale(1)"; (e.currentTarget as HTMLDivElement).style.boxShadow = "var(--shadow-card)"; }}
             >
@@ -520,6 +451,7 @@ function CategoriesSection() {
                 <span style={{ fontSize: "13px", color: "var(--color-text-secondary)", fontFamily: "DM Sans" }}>Shop Collection →</span>
               </div>
             </div>
+            </Link>
           ))}
         </div>
 
@@ -531,6 +463,169 @@ function CategoriesSection() {
               style={{ width: activeDot === i ? "32px" : "10px", height: "10px", borderRadius: "999px", background: activeDot === i ? "var(--color-green-dark)" : "#C8C0B0", border: "none", cursor: "pointer", transition: "width 0.25s ease, background 0.25s ease", padding: 0 }}
             />
           ))}
+        </div>
+
+        {/* Extra Rows: Plant types, Seeds, Soil/Tools & Pots */}
+        <div style={{ marginTop: "40px", display: "flex", flexDirection: "column", gap: "28px" }}>
+          {/* Plant Types Row */}
+          <div>
+            <h3 style={{ fontFamily: "Poppins", fontWeight: 700, fontSize: "18px", color: "var(--color-text-primary)", marginBottom: "12px" }}>Plant Types</h3>
+            <div style={{ display: "flex", gap: "18px", overflowX: "auto", paddingBottom: "8px" }}>
+              {[
+                { id: "indoor", label: "Indoor Plants", emoji: "🏠", img: "/cat-indoor.png", price: 24.99 },
+                { id: "flowers", label: "Flower Plants", emoji: "🌸", img: "/cat-flowers.png", price: 29.99, discount: 0.15 },
+                { id: "succulents", label: "Succulents", emoji: "🌵", img: "/cat-succulents.png", price: 18.5 },
+                { id: "balcony", label: "Balcony Decor", emoji: "🌿", img: "/cat-balcony.png", price: 34.0, discount: 0.1 },
+                { id: "terrarium", label: "Terrarium Kits", emoji: "🧪", img: "/product-soil.png", price: 44.0 },
+                { id: "hanging", label: "Hanging Plants", emoji: "🪢", img: "/cat-balcony.png", price: 27.5, discount: 0.2 },
+              ].map((it: any) => (
+                <Link key={it.id} href={`/plants/${it.id}`} style={{ textDecoration: "none", flex: "0 0 auto" }}>
+                  <div style={{ minWidth: "220px", background: "var(--color-white)", borderRadius: "var(--radius-md)", boxShadow: "var(--shadow-card)", overflow: "hidden", cursor: "pointer" }}>
+                    <div style={{ height: "140px", position: "relative", background: "#f6f6f4" }}>
+                      <Image src={it.img} alt={it.label} fill sizes="220px" style={{ objectFit: "cover" }} />
+                    </div>
+                    <div style={{ padding: "12px", textAlign: "center" }}>
+                      <div style={{ fontSize: "22px", marginBottom: "6px" }}>{it.emoji}</div>
+                      <div style={{ fontFamily: "Poppins", fontWeight: 700, color: "var(--color-text-primary)" }}>{it.label}</div>
+                      {/* Price display */}
+                      <div style={{ marginTop: "10px" }}>
+                        {typeof it.price === "number" && (
+                          (() => {
+                            const hasDiscount = typeof it.discount === "number" && it.discount > 0;
+                            const original = `$${it.price.toFixed(2)}`;
+                            const newPrice = hasDiscount ? `$${(it.price * (1 - it.discount)).toFixed(2)}` : null;
+                            return (
+                              <div>
+                                {hasDiscount ? (
+                                  <div style={{ display: "flex", justifyContent: "center", gap: "8px", alignItems: "center" }}>
+                                    <span style={{ textDecoration: "line-through", color: "#9B9B9B", fontSize: "13px" }}>{original}</span>
+                                    <span style={{ fontFamily: "Poppins", fontWeight: 700, color: "var(--color-green-dark)" }}>{newPrice}</span>
+                                  </div>
+                                ) : (
+                                  <div style={{ fontFamily: "Poppins", fontWeight: 700, color: "var(--color-green-dark)" }}>{original}</div>
+                                )}
+                              </div>
+                            );
+                          })()
+                        )}
+                        <div>
+                          <button onClick={(e) => { e.preventDefault(); addToCart(1); }}
+                            style={{ marginTop: "8px", background: "var(--color-green-dark)", color: "white", border: "none", padding: "8px 14px", borderRadius: "999px", cursor: "pointer", fontFamily: "Poppins", fontWeight: 700 }}>
+                            + Add to Cart
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+
+          {/* Seed Types Row */}
+          <div>
+            <h3 style={{ fontFamily: "Poppins", fontWeight: 700, fontSize: "18px", color: "var(--color-text-primary)", marginBottom: "12px" }}>Seed Types</h3>
+            <div style={{ display: "flex", gap: "18px", overflowX: "auto", paddingBottom: "8px" }}>
+              {[
+                { id: "wildflower", label: "Wildflower Mix", img: "/product-seeds.png", price: 12.99, discount: 0.1 },
+                { id: "herbs", label: "Herb Seeds", img: "/product-seeds.png", price: 8.5 },
+                { id: "veggies", label: "Vegetable Seeds", img: "/product-seeds.png", price: 9.99, discount: 0.2 },
+                { id: "microgreen", label: "Microgreen Pack", img: "/product-seeds.png", price: 6.5 },
+                { id: "flower-seed-small", label: "Petite Flower Pack", img: "/product-seeds.png", price: 7.99 },
+              ].map((it: any) => (
+                <Link key={it.id} href={`/products/${it.id}`} style={{ textDecoration: "none", flex: "0 0 auto" }}>
+                  <div style={{ minWidth: "200px", background: "var(--color-white)", borderRadius: "var(--radius-md)", boxShadow: "var(--shadow-card)", overflow: "hidden", cursor: "pointer" }}>
+                    <div style={{ height: "120px", position: "relative", background: "#faf8f6" }}>
+                      <Image src={it.img} alt={it.label} fill sizes="200px" style={{ objectFit: "cover" }} />
+                    </div>
+                    <div style={{ padding: "10px", textAlign: "center" }}>
+                      <div style={{ fontFamily: "Poppins", fontWeight: 700, color: "var(--color-text-primary)" }}>{it.label}</div>
+                      {/* Price & discount */}
+                      <div style={{ marginTop: "10px" }}>
+                        {typeof it.price === "number" && (
+                          (() => {
+                            const hasDiscount = typeof it.discount === "number" && it.discount > 0;
+                            const original = `$${it.price.toFixed(2)}`;
+                            const newPrice = hasDiscount ? `$${(it.price * (1 - it.discount)).toFixed(2)}` : null;
+                            return (
+                              <div>
+                                {hasDiscount ? (
+                                  <div style={{ display: "flex", justifyContent: "center", gap: "8px", alignItems: "center" }}>
+                                    <span style={{ textDecoration: "line-through", color: "#9B9B9B", fontSize: "13px" }}>{original}</span>
+                                    <span style={{ fontFamily: "Poppins", fontWeight: 700, color: "var(--color-green-dark)" }}>{newPrice}</span>
+                                  </div>
+                                ) : (
+                                  <div style={{ fontFamily: "Poppins", fontWeight: 700, color: "var(--color-green-dark)" }}>{original}</div>
+                                )}
+                              </div>
+                            );
+                          })()
+                        )}
+                        <div>
+                          <button onClick={(e) => { e.preventDefault(); addToCart(1); }}
+                            style={{ marginTop: "8px", background: "var(--color-green-dark)", color: "white", border: "none", padding: "8px 14px", borderRadius: "999px", cursor: "pointer", fontFamily: "Poppins", fontWeight: 700 }}>
+                            + Add to Cart
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+
+          {/* Soil, Tools & Pots Row */}
+          <div>
+            <h3 style={{ fontFamily: "Poppins", fontWeight: 700, fontSize: "18px", color: "var(--color-text-primary)", marginBottom: "12px" }}>Soil, Tools & Pots</h3>
+            <div style={{ display: "flex", gap: "18px", overflowX: "auto", paddingBottom: "8px" }}>
+              {[
+                { id: "soil", label: "Potting Mix", img: "/product-soil.png", price: 18.5, discount: 0.12 },
+                { id: "tools", label: "Tools & Spray", img: "/product-spray.png", price: 9.99 },
+                { id: "pots", label: "Pots & Planters", img: "/product-soil.png", price: 22.0 },
+                { id: "fertilizer-small", label: "Mini Fertilizer", img: "/product-fertilizer.png", price: 7.5 },
+                { id: "grow-bag", label: "Grow Bag", img: "/product-soil.png", price: 11.25, discount: 0.05 },
+              ].map((it: any) => (
+                <Link key={it.id} href={`/products/${it.id}`} style={{ textDecoration: "none", flex: "0 0 auto" }}>
+                  <div style={{ minWidth: "200px", background: "var(--color-white)", borderRadius: "var(--radius-md)", boxShadow: "var(--shadow-card)", overflow: "hidden", cursor: "pointer" }}>
+                    <div style={{ height: "120px", position: "relative", background: "#f9f7f3" }}>
+                      <Image src={it.img} alt={it.label} fill sizes="200px" style={{ objectFit: "cover" }} />
+                    </div>
+                    <div style={{ padding: "10px", textAlign: "center" }}>
+                      <div style={{ fontFamily: "Poppins", fontWeight: 700, color: "var(--color-text-primary)" }}>{it.label}</div>
+                      <div style={{ marginTop: "10px" }}>
+                        {typeof it.price === "number" && (
+                          (() => {
+                            const hasDiscount = typeof it.discount === "number" && it.discount > 0;
+                            const original = `$${it.price.toFixed(2)}`;
+                            const newPrice = hasDiscount ? `$${(it.price * (1 - it.discount)).toFixed(2)}` : null;
+                            return (
+                              <div>
+                                {hasDiscount ? (
+                                  <div style={{ display: "flex", justifyContent: "center", gap: "8px", alignItems: "center" }}>
+                                    <span style={{ textDecoration: "line-through", color: "#9B9B9B", fontSize: "13px" }}>{original}</span>
+                                    <span style={{ fontFamily: "Poppins", fontWeight: 700, color: "var(--color-green-dark)" }}>{newPrice}</span>
+                                  </div>
+                                ) : (
+                                  <div style={{ fontFamily: "Poppins", fontWeight: 700, color: "var(--color-green-dark)" }}>{original}</div>
+                                )}
+                              </div>
+                            );
+                          })()
+                        )}
+                        <div>
+                          <button onClick={(e) => { e.preventDefault(); addToCart(1); }}
+                            style={{ marginTop: "8px", background: "var(--color-green-dark)", color: "white", border: "none", padding: "8px 14px", borderRadius: "999px", cursor: "pointer", fontFamily: "Poppins", fontWeight: 700 }}>
+                            + Add to Cart
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
       <style>{`::-webkit-scrollbar { display: none; }`}</style>
@@ -804,7 +899,7 @@ function Footer() {
 export default function Home() {
   return (
     <>
-      <Navbar />
+      <Navbar cartCount={3} />
       <main>
         <HeroSection />
         <CategoriesSection />
@@ -813,6 +908,55 @@ export default function Home() {
         <CommunityBanner />
       </main>
       <Footer />
+      <WhatsAppWidget />
     </>
+  );
+}
+
+function WhatsAppWidget() {
+  const [open, setOpen] = useState(false);
+  const phone = "0170637279744";
+  const waUrl = `https://wa.me/${phone}`;
+
+  return (
+    <div>
+      {/* Panel */}
+      <div style={{ position: "fixed", right: 20, bottom: 88, zIndex: 9999, transition: "opacity 0.2s", opacity: open ? 1 : 0, pointerEvents: open ? "auto" : "none" }}>
+        <div style={{ width: 300, background: "white", borderRadius: 12, boxShadow: "0 12px 36px rgba(0,0,0,0.18)", overflow: "hidden", fontFamily: "DM Sans" }}>
+          <div style={{ padding: "14px 12px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+            <div>
+              <div style={{ fontFamily: "Poppins", fontWeight: 700, color: "var(--color-text-primary)", marginBottom: 4 }}>Hi! How can we help you?</div>
+              <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>Typically replies in few minutes</div>
+            </div>
+            <button onClick={() => setOpen(false)} aria-label="Close" style={{ background: "transparent", border: "none", cursor: "pointer", fontSize: 16 }}>✕</button>
+          </div>
+          <div style={{ padding: 12, display: "flex", gap: 8, flexDirection: "column" }}>
+            <a href={waUrl} target="_blank" rel="noopener noreferrer" style={{ textDecoration: "none" }}>
+              <button style={{ width: "100%", background: "#25D366", color: "white", border: "none", padding: "10px 12px", borderRadius: 8, fontFamily: "Poppins", fontWeight: 700, cursor: "pointer" }}>Start Chat</button>
+            </a>
+            <a href="https://sagepilot.ai/" target="_blank" rel="noopener noreferrer" style={{ textDecoration: "none", display: "inline-block", textAlign: "center" }}>
+              <button style={{ width: "100%", background: "transparent", color: "#6B7280", border: "1px solid #E5E7EB", padding: "8px 12px", borderRadius: 8, fontFamily: "Poppins", fontWeight: 600, cursor: "pointer" }}>Powered by SagePilot</button>
+            </a>
+          </div>
+        </div>
+      </div>
+
+      {/* Floating Button */}
+      <div style={{ position: "fixed", right: 20, bottom: 20, zIndex: 9999 }}>
+        <button onClick={() => setOpen((s) => !s)} aria-label={open ? "Close chat" : "Open WhatsApp chat"} style={{ width: 56, height: 56, borderRadius: 999, background: "#25D366", border: "none", boxShadow: "0 8px 24px rgba(37,211,102,0.28)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+          {open ? (
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+              <line x1="4" y1="4" x2="20" y2="20" stroke="white" strokeWidth="2.2" strokeLinecap="round" />
+              <line x1="20" y1="4" x2="4" y2="20" stroke="white" strokeWidth="2.2" strokeLinecap="round" />
+            </svg>
+          ) : (
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden>
+              <circle cx="12" cy="12" r="11" fill="#25D366" />
+              <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.472-.149-.672.15-.198.297-.768.967-.942 1.167-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.654-2.058-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.372-.025-.521-.075-.149-.672-1.611-.92-2.206-.242-.579-.487-.5-.672-.51l-.573-.01c-.198 0-.52.074-.793.372s-1.04 1.016-1.04 2.479 1.064 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487 1.355.586 1.912.621 2.592.52.397-.066 1.758-.718 2.006-1.412.248-.695.248-1.29.173-1.412-.074-.123-.272-.198-.57-.347z" fill="white" />
+            </svg>
+          )}
+        </button>
+      </div>
+    </div>
   );
 }
