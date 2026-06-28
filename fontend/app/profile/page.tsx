@@ -1,2232 +1,2248 @@
 "use client";
-
 import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
-import SharedNavbar from "@/components/Navbar";
-
-/* ══════════════════════════════════════════════════════════
-   MOCK DATA (Fallback Initial States)
-   ══════════════════════════════════════════════════════════ */
-const INITIAL_PLANTS = [
-  { id: 1, name: "Monstera Deliciosa", pot: "White Ceramic", health: 92, water: "Tomorrow", light: "Bright indirect", img: "/monstera.png", badge: "Thriving" },
-  { id: 2, name: 'Fern "Green Lady"', pot: "Terracotta", health: 78, water: "Today", light: "Medium indirect", img: "/fern-small.png", badge: "Needs Water" },
-  { id: 3, name: "Peace Lily", pot: "Rattan Basket", health: 88, water: "In 2 days", light: "Low light", img: "/fern-medium.png", badge: "Healthy" },
-  { id: 4, name: "Bird of Paradise", pot: "Black Geometric", health: 95, water: "In 3 days", light: "Full sun", img: "/fern-large.png", badge: "Thriving" },
-  { id: 5, name: "Succulent Mix", pot: "Terracotta", health: 99, water: "In 7 days", light: "Direct sun", img: "/cat-succulents.png", badge: "Perfect" },
-  { id: 6, name: "Balcony Blooms", pot: "White Minimalist", health: 82, water: "In 2 days", light: "Bright indirect", img: "/hero-balcony.png", badge: "Healthy" },
-];
-
+/* ─────────────────────────────────────────────
+   DESIGN TOKENS (CSS-in-JS via style injection)
+───────────────────────────────────────────── */
+const TOKENS = `
+  @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap');
+  :root {
+    --color-surface-raised: #00b566;
+    --color-surface-strong: #fefcf9;
+    --color-surface-base: #000000;
+    --color-text-secondary: #1c1c1c;
+    --color-text-tertiary: #ffffff;
+    --color-text-inverse: #212326;
+    --profile-page-bg: #fefcf9;
+    --profile-sidebar-bg: #fefcf9;
+    --profile-sidebar-active-bg: rgba(0,181,102,0.10);
+    --profile-sidebar-active-text: #00b566;
+    --profile-sidebar-active-bar: #00b566;
+    --profile-sidebar-hover-bg: rgba(0,181,102,0.06);
+    --profile-card-bg: #fefcf9;
+    --profile-card-border: rgba(28,28,28,0.10);
+    --profile-heading: #1c1c1c;
+    --profile-body: #212326;
+    --profile-meta: rgba(28,28,28,0.45);
+    --profile-cta-bg: #00b566;
+    --profile-cta-text: #ffffff;
+    --profile-input-bg: #fefcf9;
+    --profile-input-border: rgba(28,28,28,0.20);
+    --profile-input-focus: #00b566;
+    --profile-divider: rgba(28,28,28,0.10);
+    --profile-focus-ring: #00b566;
+    --profile-avatar-bg: #00b566;
+    --profile-avatar-text: #ffffff;
+    --profile-star-fill: #c8a84b;
+    --profile-status-delivered: #16a34a;
+    --profile-status-processing: #d97706;
+    --profile-status-shipped: #2563eb;
+    --profile-status-cancelled: #dc2626;
+    --profile-status-returned: #7c3aed;
+    --profile-danger-text: #dc2626;
+    --profile-danger-border: #dc2626;
+    --profile-points-bg: rgba(0,181,102,0.08);
+    --profile-overlay-bg: rgba(0,0,0,0.55);
+    --profile-skeleton-base: rgba(28,28,28,0.08);
+    --profile-skeleton-shine: rgba(255,255,255,0.60);
+    --radius-xs: 4px;
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 16px;
+    --radius-xl: 20px;
+    --radius-pill: 50px;
+    --radius-full: 9999px;
+    --shadow-card: 0 4px 20px rgba(28,28,28,0.06);
+    --shadow-modal: 0 20px 60px rgba(0,0,0,0.18);
+    --shadow-avatar: 0 4px 16px rgba(0,181,102,0.25);
+    --shadow-sidebar: 2px 0 16px rgba(28,28,28,0.06);
+    --motion-instant: 200ms;
+    --motion-fast: 250ms;
+    --motion-normal: 300ms;
+    --motion-slow: 500ms;
+  }
+  @keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+  @keyframes modalOpen {
+    from { opacity: 0; transform: scale(0.96); }
+    to { opacity: 1; transform: scale(1); }
+  }
+  @keyframes slideUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes pulseRing {
+    0% { box-shadow: 0 0 0 0 rgba(0,181,102,0.4); }
+    70% { box-shadow: 0 0 0 8px rgba(0,181,102,0); }
+    100% { box-shadow: 0 0 0 0 rgba(0,181,102,0); }
+  }
+  @keyframes toastIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes toastOut {
+    from { opacity: 1; transform: translateY(0); }
+    to { opacity: 0; transform: translateY(20px); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+  .profile-page * {
+    font-family: 'Outfit', sans-serif;
+    box-sizing: border-box;
+  }
+  .profile-page {
+    background: var(--profile-page-bg);
+    min-height: 100vh;
+  }
+  /* ── Scrollbar ── */
+  .profile-page ::-webkit-scrollbar { width: 5px; }
+  .profile-page ::-webkit-scrollbar-track { background: transparent; }
+  .profile-page ::-webkit-scrollbar-thumb { background: var(--profile-divider); border-radius: var(--radius-full); }
+  /* ── Focus rings ── */
+  .profile-page *:focus-visible {
+    outline: 2px solid var(--profile-focus-ring);
+    outline-offset: 2px;
+  }
+  /* ── Skeleton shimmer ── */
+  .skeleton {
+    background: linear-gradient(90deg, var(--profile-skeleton-base) 25%, var(--profile-skeleton-shine) 50%, var(--profile-skeleton-base) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+    border-radius: var(--radius-sm);
+  }
+  /* ── Screen reader only ── */
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0,0,0,0);
+    white-space: nowrap;
+    border: 0;
+  }
+  /* ── Profile Buttons ── */
+  .btn-profile-primary {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--profile-cta-bg);
+    color: var(--profile-cta-text);
+    font-size: 16px;
+    font-weight: 600;
+    height: 44px;
+    padding: 0 20px;
+    border-radius: var(--radius-full);
+    border: none;
+    cursor: pointer;
+    transition: all var(--motion-instant) ease;
+    white-space: nowrap;
+  }
+  .btn-profile-primary:hover {
+    background: #009952;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0,181,102,0.30);
+  }
+  .btn-profile-outline {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: transparent;
+    color: var(--profile-heading);
+    font-size: 15px;
+    font-weight: 600;
+    height: 40px;
+    padding: 0 16px;
+    border-radius: var(--radius-full);
+    border: 1px solid var(--profile-input-border);
+    cursor: pointer;
+    transition: all var(--motion-instant) ease;
+    white-space: nowrap;
+  }
+  .btn-profile-outline:hover {
+    border-color: var(--color-surface-raised);
+    color: var(--color-surface-raised);
+  }
+  .btn-profile-danger {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: transparent;
+    color: var(--profile-danger-text);
+    font-size: 14px;
+    font-weight: 600;
+    height: 40px;
+    padding: 0 16px;
+    border-radius: var(--radius-full);
+    border: 1px solid var(--profile-danger-border);
+    cursor: pointer;
+    transition: all var(--motion-instant) ease;
+  }
+  .btn-profile-danger:hover {
+    background: rgba(220,38,38,0.08);
+  }
+  /* ── Form inputs ── */
+  .profile-input {
+    width: 100%;
+    height: 48px;
+    padding: 0 14px;
+    font-size: 16px;
+    color: var(--profile-heading);
+    background: var(--profile-input-bg);
+    border: 1px solid var(--profile-input-border);
+    border-radius: var(--radius-sm);
+    outline: none;
+    transition: border-color var(--motion-instant) ease;
+  }
+  .profile-input:hover { border-color: rgba(28,28,28,0.35); }
+  .profile-input:focus { border-color: var(--profile-input-focus); box-shadow: 0 0 0 3px rgba(0,181,102,0.12); }
+  .profile-input::placeholder { color: var(--profile-meta); }
+  .profile-input.error { border-color: var(--profile-danger-text); }
+  .profile-textarea {
+    width: 100%;
+    padding: 12px 14px;
+    font-size: 16px;
+    color: var(--profile-heading);
+    background: var(--profile-input-bg);
+    border: 1px solid var(--profile-input-border);
+    border-radius: var(--radius-sm);
+    outline: none;
+    resize: vertical;
+    min-height: 100px;
+    font-family: 'Outfit', sans-serif;
+    transition: border-color var(--motion-instant) ease;
+  }
+  .profile-textarea:focus { border-color: var(--profile-input-focus); box-shadow: 0 0 0 3px rgba(0,181,102,0.12); }
+  .profile-textarea::placeholder { color: var(--profile-meta); }
+  .profile-select {
+    width: 100%;
+    height: 48px;
+    padding: 0 14px;
+    font-size: 16px;
+    color: var(--profile-heading);
+    background: var(--profile-input-bg);
+    border: 1px solid var(--profile-input-border);
+    border-radius: var(--radius-sm);
+    outline: none;
+    cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L6 7L11 1' stroke='%231c1c1c' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 14px center;
+    padding-right: 36px;
+    transition: border-color var(--motion-instant) ease;
+  }
+  .profile-select:focus { border-color: var(--profile-input-focus); box-shadow: 0 0 0 3px rgba(0,181,102,0.12); }
+  /* ── Toggle switch ── */
+  .toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 44px;
+    height: 24px;
+    flex-shrink: 0;
+  }
+  .toggle-switch input { opacity: 0; width: 0; height: 0; }
+  .toggle-track {
+    position: absolute;
+    inset: 0;
+    background: var(--profile-divider);
+    border-radius: var(--radius-full);
+    cursor: pointer;
+    transition: background var(--motion-instant) ease;
+  }
+  .toggle-track::before {
+    content: '';
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    left: 2px;
+    top: 2px;
+    background: white;
+    border-radius: 50%;
+    transition: transform var(--motion-instant) ease;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+  }
+  .toggle-switch input:checked + .toggle-track { background: var(--color-surface-raised); }
+  .toggle-switch input:checked + .toggle-track::before { transform: translateX(20px); }
+  .toggle-switch input:focus-visible + .toggle-track { outline: 2px solid var(--profile-focus-ring); outline-offset: 2px; }
+  /* ── Status badges ── */
+  .badge-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: var(--radius-full);
+  }
+  /* ── Card shell ── */
+  .profile-card {
+    background: var(--profile-card-bg);
+    border: 1px solid var(--profile-card-border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-card);
+    padding: 16px;
+    transition: box-shadow var(--motion-instant) ease;
+  }
+  .profile-card:hover { box-shadow: 0 8px 32px rgba(28,28,28,0.10); }
+  /* ── Section header ── */
+  .section-hdr {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 24px;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .section-title-lg {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--profile-heading);
+    line-height: 1.3;
+  }
+  .section-count {
+    color: var(--profile-meta);
+    font-weight: 400;
+  }
+  /* ── Empty state ── */
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 60px 24px;
+    text-align: center;
+    gap: 12px;
+  }
+  .empty-state-icon { font-size: 48px; opacity: 0.5; }
+  .empty-state h3 { font-size: 16px; font-weight: 700; color: var(--profile-heading); }
+  .empty-state p { font-size: 14px; color: var(--profile-meta); max-width: 300px; line-height: 1.6; }
+  /* ── Modal ── */
+  .modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: var(--profile-overlay-bg);
+    z-index: 200;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+  .modal-shell {
+    background: var(--profile-card-bg);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-modal);
+    width: 100%;
+    max-height: 90vh;
+    overflow-y: auto;
+    animation: modalOpen var(--motion-normal) ease;
+  }
+  .modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 24px 16px;
+    border-bottom: 1px solid var(--profile-divider);
+  }
+  .modal-title { font-size: 18px; font-weight: 700; color: var(--profile-heading); }
+  .modal-close {
+    width: 36px; height: 36px;
+    display: flex; align-items: center; justify-content: center;
+    background: transparent;
+    border: 1px solid var(--profile-divider);
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 18px;
+    color: var(--profile-meta);
+    transition: all var(--motion-instant) ease;
+    flex-shrink: 0;
+  }
+  .modal-close:hover { background: var(--profile-divider); color: var(--profile-heading); }
+  .modal-body { padding: 24px; }
+  .modal-footer {
+    display: flex;
+    gap: 12px;
+    padding: 16px 24px 20px;
+    border-top: 1px solid var(--profile-divider);
+  }
+  .modal-footer .btn-profile-primary { flex: 1; justify-content: center; }
+  /* ── Sidebar ── */
+  .sidebar-nav-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    height: 48px;
+    padding: 0 16px;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--profile-body);
+    border: none;
+    background: transparent;
+    width: 100%;
+    text-align: left;
+    position: relative;
+    transition: all var(--motion-instant) ease;
+    border-left: 3px solid transparent;
+  }
+  .sidebar-nav-item:hover {
+    background: var(--profile-sidebar-hover-bg);
+    color: var(--profile-heading);
+  }
+  .sidebar-nav-item.active {
+    background: var(--profile-sidebar-active-bg);
+    color: var(--profile-sidebar-active-text);
+    font-weight: 700;
+    border-left-color: var(--profile-sidebar-active-bar);
+  }
+  .sidebar-nav-item.active .nav-icon { color: var(--color-surface-raised); }
+  .sidebar-nav-item:hover .nav-icon { color: var(--color-surface-raised); }
+  .nav-icon { font-size: 18px; flex-shrink: 0; color: var(--profile-meta); transition: color var(--motion-instant); }
+  .nav-badge {
+    margin-left: auto;
+    background: var(--color-surface-raised);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: var(--radius-full);
+    min-width: 20px;
+    text-align: center;
+  }
+  /* ── Filter tabs ── */
+  .filter-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+  .filter-tab {
+    height: 38px;
+    padding: 0 16px;
+    border-radius: var(--radius-full);
+    border: 1px solid var(--profile-input-border);
+    background: transparent;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--profile-body);
+    cursor: pointer;
+    transition: all var(--motion-instant) ease;
+    white-space: nowrap;
+  }
+  .filter-tab:hover { border-color: var(--color-surface-raised); color: var(--color-surface-raised); }
+  .filter-tab.active { background: var(--color-surface-raised); color: #fff; font-weight: 700; border-color: var(--color-surface-raised); }
+  /* ── Order card ── */
+  .order-status-delivered { background: rgba(22,163,74,0.12); color: #16a34a; }
+  .order-status-processing { background: rgba(217,119,6,0.12); color: #d97706; }
+  .order-status-shipped { background: rgba(37,99,235,0.12); color: #2563eb; }
+  .order-status-cancelled { background: rgba(220,38,38,0.12); color: #dc2626; }
+  .order-status-returned { background: rgba(124,58,237,0.12); color: #7c3aed; }
+  /* ── Loyalty progress bar ── */
+  .loyalty-progress-track {
+    width: 100%;
+    height: 8px;
+    background: rgba(0,181,102,0.15);
+    border-radius: var(--radius-full);
+    overflow: hidden;
+  }
+  .loyalty-progress-fill {
+    height: 100%;
+    background: var(--color-surface-raised);
+    border-radius: var(--radius-full);
+    transition: width var(--motion-slow) ease;
+  }
+  /* ── Star rating ── */
+  .star-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 28px;
+    padding: 2px;
+    color: var(--profile-divider);
+    transition: color var(--motion-instant) ease, transform var(--motion-instant) ease;
+    line-height: 1;
+  }
+  .star-btn.filled { color: var(--profile-star-fill); }
+  .star-btn:hover { transform: scale(1.15); }
+  /* ── Notification item ── */
+  .notif-item {
+    display: flex;
+    gap: 14px;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--profile-divider);
+    transition: background var(--motion-instant) ease;
+    cursor: pointer;
+  }
+  .notif-item:last-child { border-bottom: none; }
+  .notif-item.unread {
+    background: rgba(0,181,102,0.06);
+    border-left: 3px solid var(--color-surface-raised);
+  }
+  .notif-item.read { border-left: 3px solid transparent; }
+  /* ── Mobile bottom tab bar ── */
+  @media (min-width: 768px) { .mobile-tab-bar { display: none !important; } }
+  @media (max-width: 767px) {
+    .sidebar-desktop { display: none !important; }
+    .mobile-tab-bar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 60px;
+      background: var(--color-surface-strong);
+      border-top: 1px solid var(--profile-divider);
+      display: flex;
+      align-items: center;
+      z-index: 100;
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+    .mobile-tab-btn {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 3px;
+      height: 100%;
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      font-size: 9px;
+      font-weight: 500;
+      color: var(--profile-meta);
+      transition: color var(--motion-instant) ease;
+      font-family: 'Outfit', sans-serif;
+      border-top: 2px solid transparent;
+      padding-top: 2px;
+    }
+    .mobile-tab-btn.active {
+      color: var(--color-surface-raised);
+      border-top-color: var(--color-surface-raised);
+    }
+    .mobile-tab-btn span { font-size: 22px; }
+    .profile-main-content { padding-bottom: 80px !important; }
+  }
+  /* ── Responsive grid ── */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+  }
+  @media (max-width: 1023px) {
+    .stats-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+  .wishlist-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+  }
+  @media (max-width: 1023px) { .wishlist-grid { grid-template-columns: repeat(3, 1fr); } }
+  @media (max-width: 640px) { .wishlist-grid { grid-template-columns: repeat(2, 1fr); } }
+  .address-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+  }
+  @media (max-width: 640px) { .address-grid { grid-template-columns: 1fr; } }
+  .form-grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+  @media (max-width: 640px) { .form-grid-2 { grid-template-columns: 1fr; } }
+  /* Tracking step */
+  .track-step {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+    position: relative;
+  }
+  .track-step:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    left: 11px;
+    top: 24px;
+    width: 2px;
+    bottom: -16px;
+    background: var(--profile-divider);
+  }
+  .track-step.completed:not(:last-child)::after { background: var(--color-surface-raised); }
+  .track-dot {
+    width: 24px; height: 24px;
+    border-radius: 50%;
+    border: 2px solid var(--profile-divider);
+    background: white;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    z-index: 1;
+  }
+  .track-dot.completed { background: var(--color-surface-raised); border-color: var(--color-surface-raised); color: white; }
+  .track-dot.current { background: var(--color-surface-raised); border-color: var(--color-surface-raised); color: white; animation: pulseRing 2s infinite; }
+  /* Password strength */
+  .pwd-strength-bar {
+    display: flex;
+    gap: 4px;
+    margin-top: 6px;
+  }
+  .pwd-seg {
+    flex: 1;
+    height: 4px;
+    border-radius: var(--radius-full);
+    background: var(--profile-divider);
+    transition: background var(--motion-fast) ease;
+  }
+  /* Toast */
+  .toast-container {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 300;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    align-items: center;
+    pointer-events: none;
+  }
+  .toast-item {
+    background: #1c1c1c;
+    color: #fff;
+    font-size: 14px;
+    font-weight: 500;
+    padding: 12px 20px;
+    border-radius: var(--radius-md);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    animation: toastIn var(--motion-fast) ease;
+    pointer-events: all;
+    max-width: 380px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+  }
+  .toast-success { border-left: 4px solid var(--color-surface-raised); }
+  .toast-error { border-left: 4px solid var(--profile-danger-text); }
+  .toast-info { border-left: 4px solid rgba(0,181,102,0.6); }
+  .toast-undo-btn { background: none; border: none; color: var(--color-surface-raised); font-weight: 700; cursor: pointer; padding: 0 4px; font-size: 13px; font-family: 'Outfit', sans-serif; }
+  /* Announcement bar */
+  .announcement-bar {
+    background: var(--color-surface-raised);
+    color: #fff;
+    text-align: center;
+    font-size: 13px;
+    font-weight: 500;
+    padding: 9px 16px;
+    letter-spacing: 0.01em;
+  }
+  /* Breadcrumb */
+  .breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--profile-body);
+    margin: 16px 0 8px;
+  }
+  .breadcrumb a { color: var(--profile-body); text-decoration: none; }
+  .breadcrumb a:hover { color: var(--color-surface-raised); }
+  .breadcrumb-sep { color: var(--profile-meta); }
+  .breadcrumb-current { font-weight: 600; color: var(--profile-heading); }
+  /* Navbar (minimal profile version) */
+  .profile-navbar {
+    height: 64px;
+    background: var(--color-surface-strong);
+    border-bottom: 1px solid var(--profile-divider);
+    display: flex;
+    align-items: center;
+    padding: 0 48px;
+    gap: 24px;
+    position: sticky;
+    top: 0;
+    z-index: 50;
+  }
+  @media (max-width: 768px) { .profile-navbar { padding: 0 20px; } }
+  .profile-navbar-brand { display: flex; align-items: center; gap: 8px; font-size: 20px; font-weight: 800; color: var(--profile-heading); text-decoration: none; }
+  .profile-navbar-brand span { color: var(--color-surface-raised); }
+  .profile-navbar-actions { margin-left: auto; display: flex; align-items: center; gap: 16px; }
+  .avatar-chip {
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    background: var(--profile-avatar-bg);
+    color: var(--profile-avatar-text);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+`;
+/* ─────────────────────────────────────────────
+   DATA (mock)
+───────────────────────────────────────────── */
+const USER = {
+  firstName: "Priya",
+  lastName: "Kumar",
+  email: "priya.kumar@example.com",
+  phone: "+91 98765 43210",
+  dob: "1992-03-15",
+  gender: "Female",
+  about: "Passionate plant lover with a balcony garden and three monstera plants.",
+  language: "English",
+  currency: "INR",
+  points: 240,
+  tier: "Plant Lover",
+  ordersCount: 12,
+  plantsCount: 5,
+  reviewsCount: 8,
+  wishlistCount: 12,
+  initials: "PK",
+};
 const ORDERS = [
-  { 
-    id: "#PB-2847", 
-    date: "Jun 12, 2026", 
-    status: "Delivered", 
-    items: ['Monstera Deliciosa', "White Ceramic Pot"], 
-    total: 68.00, 
-    img: "/monstera.png",
-    address: "12/A Park Street, Flat 4B, Kolkata, West Bengal 700016",
-    paymentMethod: "Visa ending in 4820",
-    deliveryDate: "Jun 15, 2026"
+  {
+    id: "ORD-4821", date: "15 Jun 2026", status: "delivered",
+    items: [
+      { name: "Monstera Deliciosa", variant: "Medium", price: "₹399", qty: 1, img: "🌿" },
+      { name: "Peace Lily", variant: "Small", price: "₹249", qty: 2, img: "🌸" },
+      { name: "ZZ Plant", variant: "Large", price: "₹599", qty: 1, img: "🌱" },
+    ],
+    total: "₹1,248",
+    delivery: "₹0",
   },
-  { 
-    id: "#PB-2651", 
-    date: "May 28, 2026", 
-    status: "Delivered", 
-    items: ['Fern "Green Lady"', "Terracotta Pot"], 
-    total: 34.00, 
-    img: "/fern-small.png",
-    address: "12/A Park Street, Flat 4B, Kolkata, West Bengal 700016",
-    paymentMethod: "MasterCard ending in 9851",
-    deliveryDate: "May 31, 2026"
+  {
+    id: "ORD-4312", date: "28 May 2026", status: "delivered",
+    items: [
+      { name: "Pothos Golden", variant: "Small", price: "₹199", qty: 2, img: "🍃" },
+    ],
+    total: "₹398",
+    delivery: "₹49",
   },
-  { 
-    id: "#PB-2390", 
-    date: "May 3, 2026", 
-    status: "Delivered", 
-    items: ["Watering Can Pro", "Plant Spray"], 
-    total: 29.50, 
-    img: "/watering-can.png",
-    address: "12/A Park Street, Flat 4B, Kolkata, West Bengal 700016",
-    paymentMethod: "Visa ending in 4820",
-    deliveryDate: "May 6, 2026"
-  },
-  { 
-    id: "#PB-2104", 
-    date: "Apr 10, 2026", 
-    status: "Cancelled", 
-    items: ["Premium Soil Mix", "Fertilizer Set"], 
-    total: 22.00, 
-    img: "/product-soil.png",
-    address: "12/A Park Street, Flat 4B, Kolkata, West Bengal 700016",
-    paymentMethod: "Visa ending in 4820",
-    deliveryDate: "N/A (Cancelled)"
+  {
+    id: "ORD-5102", date: "22 Jun 2026", status: "processing",
+    items: [
+      { name: "Fiddle Leaf Fig", variant: "Large", price: "₹1,299", qty: 1, img: "🌳" },
+    ],
+    total: "₹1,299",
+    delivery: "₹0",
   },
 ];
-
-const WISHLIST = [
-  { id: 1, name: "Bird of Paradise", price: 55.00, rating: 4.8, reviews: 142, img: "/cat-balcony.png", size: "Medium", color: "Black" },
-  { id: 2, name: "Fiddle Leaf Fig", price: 48.00, rating: 4.6, reviews: 98, img: "/hero-flowers.png", size: "Large", color: "Brown Terracotta" },
-  { id: 3, name: "Orchid Collection", price: 42.00, rating: 4.9, reviews: 213, img: "/cat-flowers.png", size: "Small", color: "White Ceramic" },
-  { id: 4, name: "Indoor Palm", price: 38.00, rating: 4.7, reviews: 76, img: "/cat-indoor.png", size: "Medium", color: "Grey Minimalist" },
+const WISHLIST_ITEMS = [
+  { id: 1, name: "Anthurium Red", price: "₹549", originalPrice: "₹699", img: "🌺", inStock: true },
+  { id: 2, name: "Peace Lily", price: "₹349", originalPrice: null, img: "🌸", inStock: true },
+  { id: 3, name: "Snake Plant", price: "₹449", originalPrice: "₹599", img: "🌿", inStock: true },
+  { id: 4, name: "ZZ Plant", price: "₹599", originalPrice: null, img: "🌱", inStock: false },
+  { id: 5, name: "Pothos", price: "₹199", originalPrice: null, img: "🍃", inStock: true },
+  { id: 6, name: "Bird of Paradise", price: "₹1,499", originalPrice: "₹1,999", img: "🦜", inStock: true },
+  { id: 7, name: "Rubber Plant", price: "₹799", originalPrice: null, img: "🍀", inStock: true },
+  { id: 8, name: "Philodendron", price: "₹399", originalPrice: "₹499", img: "🌴", inStock: true },
 ];
-
-const ACHIEVEMENTS = [
-  { icon: "🌱", label: "First Plant", desc: "Added your first plant", unlocked: true },
-  { icon: "💧", label: "Hydration Hero", desc: "Watered 30 days in a row", unlocked: true },
-  { icon: "🌿", label: "Green Thumb", desc: "Own 5+ healthy plants", unlocked: true },
-  { icon: "⭐", label: "Top Reviewer", desc: "Left 10 product reviews", unlocked: true },
-  { icon: "🏆", label: "Plant Parent", desc: "1 year anniversary", unlocked: false },
-  { icon: "🌸", label: "Rare Collector", desc: "Own a rare species", unlocked: false },
+const PLANTS = [
+  {
+    id: 1, name: "Monstera Deliciosa", added: "12 Jan 2026", location: "Living Room",
+    waterDays: 2, light: "Medium Light", temp: "65–85°F", repot: "May 2027", img: "🌿",
+    waterStatus: "good",
+  },
+  {
+    id: 2, name: "Peace Lily", added: "5 Mar 2026", location: "Bedroom",
+    waterDays: 0, light: "Low Light", temp: "60–80°F", repot: "Oct 2026", img: "🌸",
+    waterStatus: "today",
+  },
+  {
+    id: 3, name: "Pothos Golden", added: "20 Apr 2026", location: "Kitchen",
+    waterDays: -2, light: "Low–Medium", temp: "60–85°F", repot: "Mar 2027", img: "🍃",
+    waterStatus: "overdue",
+  },
 ];
-
-const ACTIVITY = [
-  { icon: "💧", text: "Watered Monstera Deliciosa", time: "2 hours ago", color: "#2563eb" },
-  { icon: "📦", text: "Ordered Fern \"Green Lady\" + Terracotta Pot", time: "4 days ago", color: "#00b566" },
-  { icon: "⭐", text: "Reviewed Watering Can Pro — 5 stars", time: "1 week ago", color: "#c8a84b" },
-  { icon: "❤️", text: "Wishlisted Bird of Paradise", time: "2 weeks ago", color: "#dc2626" },
-  { icon: "🌱", text: "Added Peace Lily to your garden", time: "3 weeks ago", color: "#009952" },
-  { icon: "🏆", text: "Earned \"Green Thumb\" achievement", time: "1 month ago", color: "#8b5cf6" },
+const ADDRESSES = [
+  {
+    id: 1, type: "Home", icon: "🏠", isDefault: true,
+    name: "Priya Kumar", line1: "42, Green Park Society", line2: "Baner",
+    city: "Pune", state: "Maharashtra", pin: "411045", country: "India",
+    phone: "+91 98765 43210",
+  },
+  {
+    id: 2, type: "Work", icon: "🏢", isDefault: false,
+    name: "Priya Kumar", line1: "TechHub Office, 4th Floor", line2: "Hinjewadi Phase 1",
+    city: "Pune", state: "Maharashtra", pin: "411057", country: "India",
+    phone: "+91 98765 43210",
+  },
 ];
-
-/* ══════════════════════════════════════════════════════════
-   SVG ICONS
-   ══════════════════════════════════════════════════════════ */
-const EditIcon = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-  </svg>
-);
-
-const CameraIcon = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
-    <circle cx="12" cy="13" r="4" />
-  </svg>
-);
-
-const WaterIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="#2563eb" stroke="none" aria-hidden="true">
-    <path d="M12 2C12 2 5 10 5 15C5 18.87 8.13 22 12 22C15.87 22 19 18.87 19 15C19 10 12 2 12 2Z" />
-  </svg>
-);
-
-const SunIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="#c8a84b" aria-hidden="true">
-    <circle cx="12" cy="12" r="5" />
-    {[[12,1,12,3],[12,21,12,23],[4.22,4.22,5.64,5.64],[18.36,18.36,19.78,19.78],[1,12,3,12],[21,12,23,12],[4.22,19.78,5.64,18.36],[18.36,5.64,19.78,4.22]].map(([x1,y1,x2,y2],i) => (
-      <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke="#c8a84b" strokeWidth="2.5" strokeLinecap="round" />
-    ))}
-  </svg>
-);
-
-const HeartIcon = ({ filled }: { filled?: boolean }) => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill={filled ? "#dc2626" : "none"} stroke={filled ? "#dc2626" : "currentColor"} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
-  </svg>
-);
-
-const LockIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-  </svg>
-);
-
-const BellIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-    <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-  </svg>
-);
-
-const TrashIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <polyline points="3 6 5 6 21 6"></polyline>
-    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-  </svg>
-);
-
-const PlusIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <line x1="12" y1="5" x2="12" y2="19"></line>
-    <line x1="5" y1="12" x2="19" y2="12"></line>
-  </svg>
-);
-
-/* ══════════════════════════════════════════════════════════
-   SUBCOMPONENTS
-   ══════════════════════════════════════════════════════════ */
-function HealthBar({ value }: { value: number }) {
-  const color = value >= 90 ? "var(--color-surface-raised)" : value >= 75 ? "var(--profile-star-fill)" : "var(--profile-danger-text)";
+const NOTIFICATIONS = [
+  { id: 1, icon: "🚚", title: "Your order #ORD-4821 has been shipped!", body: "Estimated delivery: 18 Jun 2026", time: "2 hrs ago", read: false },
+  { id: 2, icon: "💧", title: "Time to water your Monstera!", body: "It's been 7 days since the last watering.", time: "1 day ago", read: false },
+  { id: 3, icon: "🏅", title: "You've earned 124 Green Points!", body: "From order #ORD-4821", time: "3 days ago", read: true },
+  { id: 4, icon: "🌸", title: "Peace Lily is back in stock!", body: "Your wishlist item is now available.", time: "5 days ago", read: true },
+];
+const POINTS_HISTORY = [
+  { date: "15 Jun 2026", desc: "Order #ORD-4821", points: +124, positive: true },
+  { date: "08 Jun 2026", desc: "Referral bonus", points: +50, positive: true },
+  { date: "01 Jun 2026", desc: "Redeemed for discount", points: -100, positive: false },
+  { date: "20 May 2026", desc: "Order #ORD-4312", points: +87, positive: true },
+  { date: "10 May 2026", desc: "Birthday bonus", points: +20, positive: true },
+];
+const REVIEWS_WRITTEN = [
+  { id: 1, product: "Monstera Deliciosa", ordered: "15 Jun 2026", rating: 5, img: "🌿", text: "Absolutely beautiful plant! Arrived in perfect condition and the packaging was excellent." },
+  { id: 2, product: "Peace Lily", ordered: "08 Jun 2026", rating: 4, img: "🌸", text: "Healthy plant with great instructions. Arrived a day early!" },
+];
+const REVIEWS_PENDING = [
+  { id: 3, product: "Pothos Golden", ordered: "28 May 2026", img: "🍃" },
+];
+/* ─────────────────────────────────────────────
+   HELPERS
+───────────────────────────────────────────── */
+function getStatusStyle(status: string) {
+  switch (status) {
+    case "delivered": return { cls: "order-status-delivered", icon: "✓", label: "Delivered" };
+    case "processing": return { cls: "order-status-processing", icon: "⏳", label: "Processing" };
+    case "shipped": return { cls: "order-status-shipped", icon: "🚚", label: "Shipped" };
+    case "cancelled": return { cls: "order-status-cancelled", icon: "✕", label: "Cancelled" };
+    case "returned": return { cls: "order-status-returned", icon: "↩", label: "Returned" };
+    default: return { cls: "", icon: "", label: status };
+  }
+}
+function getWaterColor(status: string) {
+  if (status === "overdue") return { color: "#dc2626", label: "Overdue!" };
+  if (status === "today") return { color: "#d97706", label: "Due today" };
+  return { color: "#00b566", label: "Water in 2 days" };
+}
+type ToastType = { id: number; msg: string; type: "success" | "error" | "info"; onUndo?: () => void };
+/* ─────────────────────────────────────────────
+   TOAST HOOK
+───────────────────────────────────────────── */
+function useToast() {
+  const [toasts, setToasts] = useState<ToastType[]>([]);
+  const counter = useRef(0);
+  const addToast = useCallback((msg: string, type: ToastType["type"] = "success", onUndo?: () => void) => {
+    const id = ++counter.current;
+    setToasts(t => [...t, { id, msg, type, onUndo }]);
+    setTimeout(() => setToasts(t => t.filter(x => x.id !== id)), 3500);
+  }, []);
+  return { toasts, addToast };
+}
+/* ─────────────────────────────────────────────
+   ICON COMPONENTS
+───────────────────────────────────────────── */
+function LeafLogo() {
   return (
-    <div style={{ background: "rgba(0,0,0,0.08)", borderRadius: 99, height: 6, overflow: "hidden", flex: 1 }} aria-label={`Plant health is ${value}%`}>
-      <div style={{ width: `${value}%`, height: "100%", background: color, borderRadius: 99, transition: "width 0.8s ease" }} />
+    <svg width="26" height="26" viewBox="0 0 24 24" fill="none">
+      <path d="M12 2C12 2 4 5 4 13C4 17.4 7.6 21 12 21C16.4 21 20 17.4 20 13C20 5 12 2 12 2Z" fill="#00b566" />
+      <path d="M12 21V10" stroke="white" strokeWidth="1.5" strokeLinecap="round" />
+      <path d="M12 15L8 11" stroke="white" strokeWidth="1.2" strokeLinecap="round" />
+      <path d="M12 12L16 8" stroke="white" strokeWidth="1.2" strokeLinecap="round" />
+    </svg>
+  );
+}
+/* ─────────────────────────────────────────────
+   MODAL SHELL COMPONENT
+───────────────────────────────────────────── */
+interface ModalProps { title: string; onClose: () => void; maxWidth?: number; children: React.ReactNode; footer?: React.ReactNode; }
+function Modal({ title, onClose, maxWidth = 520, children, footer }: ModalProps) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", handleKey);
+    dialogRef.current?.focus();
+    return () => document.removeEventListener("keydown", handleKey);
+  }, [onClose]);
+  return (
+    <div className="modal-backdrop" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }} role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <div className="modal-shell" style={{ maxWidth }} ref={dialogRef} tabIndex={-1}>
+        <div className="modal-header">
+          <h2 className="modal-title" id="modal-title">{title}</h2>
+          <button className="modal-close" onClick={onClose} aria-label="Close dialog">✕</button>
+        </div>
+        <div className="modal-body">{children}</div>
+        {footer && <div className="modal-footer">{footer}</div>}
+      </div>
     </div>
   );
 }
-
-function Stars({ rating }: { rating: number }) {
+/* ─────────────────────────────────────────────
+   STAR RATING COMPONENT
+───────────────────────────────────────────── */
+function StarRating({ value, onChange, size = 24 }: { value: number; onChange?: (v: number) => void; size?: number; }) {
+  const [hovered, setHovered] = useState(0);
   return (
-    <div style={{ display: "flex", gap: 3 }} aria-label={`${rating} out of 5 stars`}>
+    <div role={onChange ? "radiogroup" : "img"} aria-label={`${value} out of 5 stars`} style={{ display: "flex", gap: 2 }}>
       {[1, 2, 3, 4, 5].map(i => (
-        <svg key={i} width="12" height="12" viewBox="0 0 24 24" fill={i <= Math.round(rating) ? "var(--profile-star-fill)" : "rgba(0,0,0,0.12)"} aria-hidden="true">
-          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-        </svg>
+        <button
+          key={i}
+          className={`star-btn ${(onChange ? hovered || value : value) >= i ? "filled" : ""}`}
+          style={{ fontSize: size }}
+          onClick={() => onChange?.(i)}
+          onMouseEnter={() => onChange && setHovered(i)}
+          onMouseLeave={() => onChange && setHovered(0)}
+          role={onChange ? "radio" : undefined}
+          aria-checked={onChange ? value === i : undefined}
+          aria-label={`${i} star${i > 1 ? "s" : ""}`}
+          type="button"
+          disabled={!onChange}
+        >
+          ★
+        </button>
       ))}
     </div>
   );
 }
-
-const CreditCard = ({ number, name, expiry, type, color, onDelete }: {
-  number: string;
-  name: string;
-  expiry: string;
-  type: string;
-  color: string;
-  onDelete?: () => void;
-}) => {
-  const renderLogo = () => {
-    switch (type) {
-      case "visa":
-        return <div style={{ color: "white", fontWeight: "800", fontSize: 18, fontStyle: "italic", fontFamily: "sans-serif" }}>VISA</div>;
-      case "mastercard":
-        return (
-          <div style={{ display: "flex" }}>
-            <div style={{ width: 18, height: 18, borderRadius: "50%", background: "#EB001B", marginRight: -7, opacity: 0.95 }} />
-            <div style={{ width: 18, height: 18, borderRadius: "50%", background: "#F79E1B", opacity: 0.9 }} />
-          </div>
-        );
-      case "amex":
-        return <div style={{ background: "#016FD0", color: "white", fontWeight: "bold", fontSize: 10, padding: "3px 5px", borderRadius: 3 }}>AMEX</div>;
-      default:
-        return <div style={{ color: "white", fontWeight: "800", fontSize: 18, fontStyle: "italic", fontFamily: "sans-serif" }}>VISA</div>;
-    }
-  };
-
+/* ─────────────────────────────────────────────
+   TOGGLE SWITCH COMPONENT
+───────────────────────────────────────────── */
+function ToggleSwitch({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: string; }) {
   return (
-    <div style={{
-      width: "100%",
-      maxWidth: 340,
-      height: 190,
-      borderRadius: "var(--radius-lg)",
-      background: color,
-      padding: 20,
-      color: "white",
-      position: "relative",
-      boxShadow: "0 10px 25px rgba(0,0,0,0.12)",
-      display: "flex",
-      flexDirection: "column",
-      justifyContent: "space-between",
-      overflow: "hidden",
-      border: "1px solid rgba(255,255,255,0.12)"
-    }}>
-      <div style={{
-        position: "absolute",
-        top: "-25%",
-        right: "-10%",
-        width: 140,
-        height: 140,
-        borderRadius: "50%",
-        background: "radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%)",
-        pointerEvents: "none"
-      }} />
-
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        {/* SIM Chip */}
-        <div style={{ width: 34, height: 25, borderRadius: 4, background: "linear-gradient(135deg, #f3d078 0%, #dca842 100%)", boxShadow: "inset 0 1px 1px rgba(255,255,255,0.3)" }} />
-        {renderLogo()}
-      </div>
-
-      <div style={{ fontSize: 17, letterSpacing: "2px", fontFamily: "monospace", fontWeight: "bold", margin: "14px 0" }}>
-        {number || "•••• •••• •••• ••••"}
-      </div>
-
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
-        <div style={{ minWidth: 0, flex: 1, marginRight: 10 }}>
-          <p style={{ fontSize: 7, textTransform: "uppercase", letterSpacing: "1px", opacity: 0.65, marginBottom: 2 }}>Card Holder</p>
-          <p style={{ fontSize: 11, fontWeight: "600", textTransform: "uppercase", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {name || "Your Name"}
-          </p>
-        </div>
-        
-        <div style={{ flexShrink: 0, textAlign: "right", marginRight: onDelete ? 10 : 0 }}>
-          <p style={{ fontSize: 7, textTransform: "uppercase", letterSpacing: "1px", opacity: 0.65, marginBottom: 2 }}>Expires</p>
-          <p style={{ fontSize: 11, fontWeight: "600", fontFamily: "monospace" }}>
-            {expiry || "MM/YY"}
-          </p>
-        </div>
-
-        {onDelete && (
-          <button
-            onClick={(e) => { e.stopPropagation(); onDelete(); }}
-            aria-label="Delete saved card"
-            className="delete-card-btn"
-            style={{
-              background: "rgba(255,255,255,0.18)",
-              border: "none",
-              borderRadius: "50%",
-              width: 28,
-              height: 28,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              cursor: "pointer",
-              transition: "background var(--motion-duration-instant), transform 0.1s",
-              color: "white",
-              flexShrink: 0
-            }}
-          >
-            <TrashIcon />
-          </button>
-        )}
-      </div>
-    </div>
+    <label className="toggle-switch" aria-label={label}>
+      <input type="checkbox" role="switch" aria-checked={checked} checked={checked} onChange={e => onChange(e.target.checked)} />
+      <span className="toggle-track" />
+    </label>
   );
-};
-
-/* ══════════════════════════════════════════════════════════
-   MAIN PAGE COMPONENT
-   ══════════════════════════════════════════════════════════ */
-export default function ProfilePage() {
-  const [activeTab, setActiveTab] = useState<"garden"|"orders"|"wishlist"|"billing"|"settings"|string>("garden");
-  const [editMode, setEditMode] = useState(false);
-  const [mounted, setMounted] = useState(false);
-  const [loading, setLoading] = useState(true);
-
-  // Profile fields states (synced to localStorage)
-  const [userName, setUserName] = useState("Subhajit Ghosh");
-  const [userBio, setUserBio] = useState("Plant parent of 6 🌿 | Nature lover | Always learning to grow");
-  const [userLocation, setUserLocation] = useState("Kolkata, India");
-  const [notifPref, setNotifPref] = useState({ water: true, orders: true, promo: false, tips: true });
-
-  // Lists states
-  const [myPlants, setMyPlants] = useState<typeof INITIAL_PLANTS>([]);
-  const [savedCards, setSavedCards] = useState<any[]>([]);
-  const [wishlistItems, setWishlistItems] = useState<any[]>([]);
-  const [cartCount, setCartCount] = useState(0);
-
-  // New Card form validation states
-  const [formNumber, setFormNumber] = useState("");
-  const [formName, setFormName] = useState("");
-  const [formExpiry, setFormExpiry] = useState("");
-  const [formCvv, setFormCvv] = useState("");
-  const [cardErrors, setCardErrors] = useState<Record<string, string>>({});
-  const [cardTouched, setCardTouched] = useState<Record<string, boolean>>({});
-
-  // Account Settings validation states
-  const [settingsName, setSettingsName] = useState("");
-  const [settingsEmail, setSettingsEmail] = useState("subhajit@email.com");
-  const [settingsPhone, setSettingsPhone] = useState("+91 98765 43210");
-  const [settingsLocation, setSettingsLocation] = useState("");
-  const [settingsErrors, setSettingsErrors] = useState<Record<string, string>>({});
-  const [settingsTouched, setSettingsTouched] = useState<Record<string, boolean>>({});
-
-  // Password validation states
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [passwordErrors, setPasswordErrors] = useState<Record<string, string>>({});
-  const [passwordTouched, setPasswordTouched] = useState<Record<string, boolean>>({});
-
-  // Modal control states
-  const [plantModalOpen, setPlantModalOpen] = useState(false);
-  const [orderModalOpen, setOrderModalOpen] = useState(false);
-  const [selectedOrder, setSelectedOrder] = useState<any>(null);
-  const [dangerModalOpen, setDangerModalOpen] = useState(false);
-  const [dangerType, setDangerType] = useState<"export" | "delete">("export");
-
-  // New Plant form states
-  const [newPlantName, setNewPlantName] = useState("");
-  const [newPlantPot, setNewPlantPot] = useState("Terracotta");
-  const [newPlantLight, setNewPlantLight] = useState("Bright indirect");
-  const [newPlantWater, setNewPlantWater] = useState("Today");
-  const [newPlantHealth, setNewPlantHealth] = useState(90);
-  const [plantFormErrors, setPlantFormErrors] = useState<Record<string, string>>({});
-  const [plantTouched, setPlantTouched] = useState<Record<string, boolean>>({});
-
-  // Toast messages queue state
-  const [toasts, setToasts] = useState<Array<{ id: number; text: string; type: "success" | "error" | "info" }>>([]);
-
-  // Refs for tablist accessibility
-  const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
-  const modalRef = useRef<HTMLDivElement | null>(null);
-  const triggerRef = useRef<HTMLElement | null>(null);
-
-  // Add toast helper
-  const addToast = useCallback((text: string, type: "success" | "error" | "info" = "success") => {
-    const id = Date.now() + Math.random();
-    setToasts(prev => [...prev, { id, text, type }]);
-    setTimeout(() => {
-      setToasts(prev => prev.filter(t => t.id !== id));
-    }, 3000);
-  }, []);
-
-  // Load from localStorage
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const storedName = localStorage.getItem("profile_name") || "Subhajit Ghosh";
-      const storedBio = localStorage.getItem("profile_bio") || "Plant parent of 6 🌿 | Nature lover | Always learning to grow";
-      const storedLoc = localStorage.getItem("profile_location") || "Kolkata, India";
-      const storedNotifs = localStorage.getItem("profile_notifications");
-      const storedPlants = localStorage.getItem("profile_plants");
-      const storedCards = localStorage.getItem("profile_cards");
-      const storedWishlist = localStorage.getItem("profile_wishlist");
-      const storedCart = localStorage.getItem("profile_cart_count");
-
-      setUserName(storedName);
-      setSettingsName(storedName);
-      setUserBio(storedBio);
-      setUserLocation(storedLoc);
-      setSettingsLocation(storedLoc);
-
-      if (storedNotifs) setNotifPref(JSON.parse(storedNotifs));
-      
-      if (storedPlants) {
-        setMyPlants(JSON.parse(storedPlants));
-      } else {
-        setMyPlants(INITIAL_PLANTS);
-        localStorage.setItem("profile_plants", JSON.stringify(INITIAL_PLANTS));
-      }
-
-      if (storedCards) {
-        setSavedCards(JSON.parse(storedCards));
-      } else {
-        const initialCards = [
-          { id: 1, number: "4532 7812 9012 4820", name: "Subhajit Ghosh", expiry: "12/29", type: "visa", color: "linear-gradient(135deg, #0b3f2c 0%, #009952 100%)" },
-          { id: 2, number: "5412 8890 2314 9851", name: "Subhajit Ghosh", expiry: "06/28", type: "mastercard", color: "linear-gradient(135deg, #1e3a8a 0%, #6d28d9 100%)" },
-        ];
-        setSavedCards(initialCards);
-        localStorage.setItem("profile_cards", JSON.stringify(initialCards));
-      }
-
-      if (storedWishlist) {
-        setWishlistItems(JSON.parse(storedWishlist));
-      } else {
-        const initialWishlist = WISHLIST.map(w => ({ ...w, saved: true }));
-        setWishlistItems(initialWishlist);
-        localStorage.setItem("profile_wishlist", JSON.stringify(initialWishlist));
-      }
-
-      if (storedCart) {
-        setCartCount(parseInt(storedCart, 10));
-      }
-
-      // Simulate network request with skeleton reveal
-      setTimeout(() => {
-        setLoading(false);
-        setMounted(true);
-      }, 1000);
-    }
-  }, []);
-
-  // Sync state helpers
-  const saveProfileField = (name: string, bio: string, loc: string) => {
-    setUserName(name);
-    setUserBio(bio);
-    setUserLocation(loc);
-    localStorage.setItem("profile_name", name);
-    localStorage.setItem("profile_bio", bio);
-    localStorage.setItem("profile_location", loc);
-  };
-
-  const toggleNotifPref = (key: keyof typeof notifPref) => {
-    const updated = { ...notifPref, [key]: !notifPref[key] };
-    setNotifPref(updated);
-    localStorage.setItem("profile_notifications", JSON.stringify(updated));
-    addToast(`Updated settings: ${key === "water" ? "Watering reminders" : key === "orders" ? "Order updates" : key === "promo" ? "Promotions" : "Plant care tips"} toggled.`);
-  };
-
-  // Keyboard navigation for W3C ARIA tablist
-  const handleTabKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>, index: number, tabKey: string) => {
-    const tabKeys = ["garden", "orders", "wishlist", "billing", "settings"];
-    let nextIndex = index;
-
-    if (e.key === "ArrowRight") {
-      nextIndex = (index + 1) % tabKeys.length;
-    } else if (e.key === "ArrowLeft") {
-      nextIndex = (index - 1 + tabKeys.length) % tabKeys.length;
-    } else if (e.key === "Home") {
-      nextIndex = 0;
-    } else if (e.key === "End") {
-      nextIndex = tabKeys.length - 1;
-    } else {
-      return;
-    }
-
-    e.preventDefault();
-    const nextTabKey = tabKeys[nextIndex];
-    setActiveTab(nextTabKey);
-    setTimeout(() => {
-      tabRefs.current[nextTabKey]?.focus();
-    }, 5);
-  };
-
-  /* ══════════════════════════════════════════════════════════
-     FORM VALIDATION RULES
-     ══════════════════════════════════════════════════════════ */
-  // New Card Validation
-  const validateCardField = (name: string, val: string) => {
-    let error = "";
-    if (name === "number") {
-      const clean = val.replace(/\D/g, "");
-      if (!val) error = "Card Number is required.";
-      else if (clean.length !== 16) error = "Enter a valid credit card (must be 16 digits).";
-    } else if (name === "name") {
-      if (!val.trim()) error = "Cardholder Name is required.";
-      else if (/[^a-zA-Z\s]/.test(val)) error = "Name must only contain letters.";
-    } else if (name === "expiry") {
-      if (!val) error = "Expiry Date is required.";
-      else if (!/^\d{2}\/\d{2}$/.test(val)) error = "Enter a valid format (MM/YY).";
-      else {
-        const [m, y] = val.split("/").map(Number);
-        if (m < 1 || m > 12) error = "Enter a valid month (01-12).";
-        else {
-          const now = new Date();
-          const currentYear = now.getFullYear() % 100;
-          const currentMonth = now.getMonth() + 1;
-          if (y < currentYear || (y === currentYear && m < currentMonth)) {
-            error = "This card has expired.";
-          }
-        }
-      }
-    } else if (name === "cvv") {
-      if (!val) error = "CVV is required.";
-      else if (val.length < 3) error = "CVV must be 3 characters.";
-    }
-    setCardErrors(prev => ({ ...prev, [name]: error }));
-    return !error;
-  };
-
-  // Card Inputs Formatting
-  const handleNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    let val = e.target.value.replace(/\D/g, "");
-    if (val.length > 16) val = val.substring(0, 16);
-    let formatted = "";
-    for (let i = 0; i < val.length; i++) {
-      if (i > 0 && i % 4 === 0) formatted += " ";
-      formatted += val[i];
-    }
-    setFormNumber(formatted);
-    if (cardTouched.number) validateCardField("number", formatted);
-  };
-
-  const handleExpiryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    let val = e.target.value.replace(/\D/g, "");
-    if (val.length > 4) val = val.substring(0, 4);
-    let formatted = "";
-    if (val.length > 2) {
-      formatted = val.substring(0, 2) + "/" + val.substring(2);
-    } else {
-      formatted = val;
-    }
-    setFormExpiry(formatted);
-    if (cardTouched.expiry) validateCardField("expiry", formatted);
-  };
-
-  const handleCvvChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    let val = e.target.value.replace(/\D/g, "");
-    if (val.length > 3) val = val.substring(0, 3);
-    setFormCvv(val);
-    if (cardTouched.cvv) validateCardField("cvv", val);
-  };
-
-  // Settings Information Validation
-  const validateSettingsField = (name: string, val: string) => {
-    let error = "";
-    if (name === "name") {
-      if (!val.trim()) error = "Full Name is required.";
-    } else if (name === "email") {
-      if (!val) error = "Email is required.";
-      else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)) error = "Enter a valid email address.";
-    } else if (name === "phone") {
-      if (!val) error = "Phone is required.";
-      else if (val.replace(/\D/g, "").length < 10) error = "Enter a valid phone number.";
-    } else if (name === "location") {
-      if (!val.trim()) error = "Location is required.";
-    }
-    setSettingsErrors(prev => ({ ...prev, [name]: error }));
-    return !error;
-  };
-
-  // Password fields Validation
-  const validatePasswordField = (name: string, val: string) => {
-    let error = "";
-    if (name === "currentPassword") {
-      if (!val) error = "Current Password is required.";
-    } else if (name === "newPassword") {
-      if (!val) error = "New Password is required.";
-      else if (val.length < 8) error = "Password must be at least 8 characters.";
-    } else if (name === "confirmPassword") {
-      if (!val) error = "Confirm Password is required.";
-      else if (val !== newPassword) error = "Passwords do not match.";
-    }
-    setPasswordErrors(prev => ({ ...prev, [name]: error }));
-    return !error;
-  };
-
-  // Plant Addition Validation
-  const validatePlantField = (name: string, val: any) => {
-    let error = "";
-    if (name === "name") {
-      if (!val.trim()) error = "Plant name is required.";
-    } else if (name === "health") {
-      const h = Number(val);
-      if (isNaN(h) || h < 0 || h > 100) error = "Health must be a percentage between 0 and 100.";
-    }
-    setPlantFormErrors(prev => ({ ...prev, [name]: error }));
-    return !error;
-  };
-
-  // Card detection
-  const getCardType = (num: string) => {
-    const clean = num.replace(/\D/g, "");
-    if (clean.startsWith("4")) return "visa";
-    if (clean.startsWith("5")) return "mastercard";
-    if (clean.startsWith("37") || clean.startsWith("34")) return "amex";
-    return "visa";
-  };
-
-  /* ══════════════════════════════════════════════════════════
-     FORM SUBMITS handlers
-     ══════════════════════════════════════════════════════════ */
-  const handleAddCard = (e: React.FormEvent) => {
-    e.preventDefault();
-
-    const tNumber = validateCardField("number", formNumber);
-    const tName = validateCardField("name", formName);
-    const tExpiry = validateCardField("expiry", formExpiry);
-    const tCvv = validateCardField("cvv", formCvv);
-
-    setCardTouched({ number: true, name: true, expiry: true, cvv: true });
-
-    if (tNumber && tName && tExpiry && tCvv) {
-      const newCard = {
-        id: Date.now(),
-        number: formNumber,
-        name: formName,
-        expiry: formExpiry,
-        type: getCardType(formNumber),
-        color: savedCards.length % 2 === 0 
-          ? "linear-gradient(135deg, #0b3f2c 0%, #009952 100%)" 
-          : "linear-gradient(135deg, #1e3a8a 0%, #6d28d9 100%)"
-      };
-      const updated = [...savedCards, newCard];
-      setSavedCards(updated);
-      localStorage.setItem("profile_cards", JSON.stringify(updated));
-      
-      // Reset card state
-      setFormNumber("");
-      setFormName("");
-      setFormExpiry("");
-      setFormCvv("");
-      setCardTouched({});
-      setCardErrors({});
-      addToast("New payment card successfully saved!");
-    } else {
-      addToast("Please correct the form errors before saving.", "error");
-      // Focus first error field
-      const errKeys = ["number", "name", "expiry", "cvv"];
-      for (const k of errKeys) {
-        if (cardErrors[k] || !cardTouched[k]) {
-          const el = document.getElementById(`card-${k}`);
-          el?.focus();
-          break;
-        }
-      }
-    }
-  };
-
-  const handleUpdateInfo = (e: React.FormEvent) => {
-    e.preventDefault();
-    const tName = validateSettingsField("name", settingsName);
-    const tEmail = validateSettingsField("email", settingsEmail);
-    const tPhone = validateSettingsField("phone", settingsPhone);
-    const tLoc = validateSettingsField("location", settingsLocation);
-
-    setSettingsTouched({ name: true, email: true, phone: true, location: true });
-
-    if (tName && tEmail && tPhone && tLoc) {
-      saveProfileField(settingsName, userBio, settingsLocation);
-      addToast("Account details updated successfully.");
-    } else {
-      addToast("Failed to save changes. Verify fields.", "error");
-    }
-  };
-
-  const handleChangePassword = (e: React.FormEvent) => {
-    e.preventDefault();
-    const tCurr = validatePasswordField("currentPassword", currentPassword);
-    const tNew = validatePasswordField("newPassword", newPassword);
-    const tConf = validatePasswordField("confirmPassword", confirmPassword);
-
-    setPasswordTouched({ currentPassword: true, newPassword: true, confirmPassword: true });
-
-    if (tCurr && tNew && tConf) {
-      addToast("Password changed successfully!");
-      setCurrentPassword("");
-      setNewPassword("");
-      setConfirmPassword("");
-      setPasswordTouched({});
-      setPasswordErrors({});
-    } else {
-      addToast("Please satisfy password strength criteria.", "error");
-    }
-  };
-
-  const handleAddPlant = (e: React.FormEvent) => {
-    e.preventDefault();
-    const tName = validatePlantField("name", newPlantName);
-    const tHealth = validatePlantField("health", newPlantHealth);
-
-    setPlantTouched({ name: true, health: true });
-
-    if (tName && tHealth) {
-      const badges = ["Thriving", "Healthy", "Perfect", "Needs Water"];
-      let selectedBadge = "Healthy";
-      if (newPlantHealth >= 95) selectedBadge = "Perfect";
-      else if (newPlantHealth >= 85) selectedBadge = "Thriving";
-      else if (newPlantHealth < 75) selectedBadge = "Needs Water";
-
-      const imgs = ["/monstera.png", "/fern-small.png", "/fern-medium.png", "/fern-large.png", "/cat-succulents.png", "/hero-balcony.png"];
-      const randomImg = imgs[Math.floor(Math.random() * imgs.length)];
-
-      const newPlant = {
-        id: Date.now(),
-        name: newPlantName,
-        pot: newPlantPot,
-        health: Number(newPlantHealth),
-        water: newPlantWater,
-        light: newPlantLight,
-        img: randomImg,
-        badge: selectedBadge
-      };
-
-      const updated = [newPlant, ...myPlants];
-      setMyPlants(updated);
-      localStorage.setItem("profile_plants", JSON.stringify(updated));
-
-      // Reset
-      setNewPlantName("");
-      setNewPlantPot("Terracotta");
-      setNewPlantLight("Bright indirect");
-      setNewPlantWater("Today");
-      setNewPlantHealth(90);
-      setPlantTouched({});
-      setPlantFormErrors({});
-      setPlantModalOpen(false);
-
-      addToast(`${newPlantName} has been added to your garden!`);
-      // Return focus to trigger
-      triggerRef.current?.focus();
-    } else {
-      addToast("Please fill in the plant name.", "error");
-    }
-  };
-
-  const handleDeleteCard = (id: number) => {
-    const updated = savedCards.filter(c => c.id !== id);
-    setSavedCards(updated);
-    localStorage.setItem("profile_cards", JSON.stringify(updated));
-    addToast("Saved payment method removed.", "info");
-  };
-
-  const handleHeartToggle = (id: number, name: string) => {
-    let wasSaved = false;
-    const updated = wishlistItems.map(item => {
-      if (item.id === id) {
-        wasSaved = item.saved;
-        return { ...item, saved: !item.saved };
-      }
-      return item;
-    });
-    setWishlistItems(updated);
-    localStorage.setItem("profile_wishlist", JSON.stringify(updated));
-    if (wasSaved) {
-      addToast(`Removed ${name} from your wishlist.`, "info");
-    } else {
-      addToast(`Added ${name} back to your wishlist!`, "success");
-    }
-  };
-
-  const handleAddToCart = (name: string) => {
-    const newCount = cartCount + 1;
-    setCartCount(newCount);
-    localStorage.setItem("profile_cart_count", String(newCount));
-    addToast(`Added ${name} to your Cart!`, "success");
-  };
-
-  // Danger actions execution
-  const executeDangerAction = () => {
-    if (dangerType === "export") {
-      addToast("Initiating data export. Check your email shortly.");
-    } else {
-      // Clear localStorage
-      localStorage.clear();
-      addToast("Account successfully reset.", "info");
-      setTimeout(() => {
-        window.location.reload();
-      }, 1000);
-    }
-    setDangerModalOpen(false);
-    triggerRef.current?.focus();
-  };
-
-  // Keyboard navigation & Trap focus for open modals
-  useEffect(() => {
-    if (plantModalOpen || orderModalOpen || dangerModalOpen) {
-      const focusableElements = modalRef.current?.querySelectorAll(
-        'a[href], area[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled]), iframe, object, embed, [tabindex="0"], [contenteditable]'
-      );
-      if (focusableElements && focusableElements.length > 0) {
-        const firstElement = focusableElements[0] as HTMLElement;
-        const lastElement = focusableElements[focusableElements.length - 1] as HTMLElement;
-        
-        // Focus first element on open
-        firstElement.focus();
-
-        const handleKeyDown = (e: KeyboardEvent) => {
-          if (e.key === "Tab") {
-            if (e.shiftKey) {
-              if (document.activeElement === firstElement) {
-                lastElement.focus();
-                e.preventDefault();
-              }
-            } else {
-              if (document.activeElement === lastElement) {
-                firstElement.focus();
-                e.preventDefault();
-              }
-            }
-          } else if (e.key === "Escape") {
-            setPlantModalOpen(false);
-            setOrderModalOpen(false);
-            setDangerModalOpen(false);
-            triggerRef.current?.focus();
-          }
-        };
-
-        window.addEventListener("keydown", handleKeyDown);
-        return () => window.removeEventListener("keydown", handleKeyDown);
-      }
-    }
-  }, [plantModalOpen, orderModalOpen, dangerModalOpen]);
-
+}
+/* ─────────────────────────────────────────────
+   SECTION: OVERVIEW DASHBOARD
+───────────────────────────────────────────── */
+function OverviewSection({ onNavigate }: { onNavigate: (s: string) => void }) {
+  const stats = [
+    { value: USER.ordersCount, label: "Orders", section: "orders", icon: "📦" },
+    { value: USER.plantsCount, label: "Plants", section: "plants", icon: "🌿" },
+    { value: USER.points, label: "Points", section: "loyalty", icon: "🏅" },
+    { value: USER.reviewsCount, label: "Reviews", section: "reviews", icon: "⭐" },
+  ];
+  const recentOrder = ORDERS[0];
+  const statusInfo = getStatusStyle(recentOrder.status);
   return (
-    <div style={{ background: "var(--color-surface-strong)", minHeight: "100vh", fontFamily: "var(--font-family-primary)", paddingTop: "64px" }}>
-      
-      {/* ────────────────────────────────────────────────────────
-         STYLING & CSS RULES (Variables, Grid, Theme, Animations)
-         ──────────────────────────────────────────────────────── */}
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Playfair+Display:ital,wght@0,700;1,700&display=swap');
-        
-        :root {
-          --color-surface-base: #000000;
-          --color-text-secondary: #1c1c1c;
-          --color-text-tertiary: #ffffff;
-          --color-text-inverse: #212326;
-          --color-surface-raised: #00b566;
-          --color-surface-strong: #fefcf9;
-
-          --font-family-primary: 'Outfit', sans-serif;
-          --font-size-xs: 11px;
-          --font-size-sm: 12px;
-          --font-size-md: 13px;
-          --font-size-lg: 13.33px;
-          --font-size-xl: 14px;
-          --font-size-2xl: 15px;
-          --font-size-3xl: 16px;
-          --font-size-4xl: 18px;
-
-          --space-1: 1px;
-          --space-2: 2px;
-          --space-3: 3px;
-          --space-4: 5px;
-          --space-5: 6px;
-          --space-6: 8px;
-          --space-7: 10px;
-          --space-8: 12px;
-
-          --radius-xs: 4px;
-          --radius-sm: 8px;
-          --radius-md: 12px;
-          --radius-lg: 16px;
-          --radius-xl: 20px;
-          --radius-2xl: 24px;
-          --radius-step7: 50px;
-          --radius-step8: 9999px;
-
-          --motion-duration-instant: 200ms;
-          --motion-duration-fast: 250ms;
-          --motion-duration-normal: 300ms;
-          --motion-duration-slow: 500ms;
-
-          --shadow-1: none;
-          --shadow-2: 0 0 0 1px inset rgb(202, 223, 212);
-          --shadow-3: 0 0 0 1px inset rgb(212, 212, 212);
-          --shadow-4: 0 0 0 1px inset var(--color-surface-raised);
-
-          --card-hover: 0 8px 28px rgba(0, 181, 102, 0.14);
-          --modal-shadow: 0 20px 60px rgba(0, 0, 0, 0.18);
-          --nav-scroll: 0 2px 8px rgba(0, 0, 0, 0.06);
-          --fab-shadow: 0 6px 20px rgba(0, 181, 102, 0.30);
-          
-          --profile-star-fill: #c8a84b;
-          --profile-danger-text: #dc2626;
-        }
-
-        *, *::before, *::after {
-          box-sizing: border-box;
-          margin: 0;
-          padding: 0;
-        }
-
-        /* Skip link style */
-        .sr-only {
-          position: absolute;
-          width: 1px;
-          height: 1px;
-          padding: 0;
-          margin: -1px;
-          overflow: hidden;
-          clip: rect(0, 0, 0, 0);
-          white-space: nowrap;
-          border: 0;
-        }
-        .sr-only-focusable:active, .sr-only-focusable:focus,
-        .focus\\:not-sr-only:focus {
-          position: fixed;
-          top: 10px;
-          left: 10px;
-          width: auto;
-          height: auto;
-          padding: 12px 24px;
-          background: var(--color-surface-raised);
-          color: white;
-          font-weight: 700;
-          border-radius: var(--radius-sm);
-          z-index: 9999;
-          outline: 2px solid white;
-          outline-offset: 2px;
-          clip: auto;
-          white-space: normal;
-        }
-
-        /* Keyboard Focus Indicator matching §5.1 */
-        button:focus-visible,
-        a:focus-visible,
-        input:focus-visible,
-        select:focus-visible,
-        textarea:focus-visible,
-        .toggle-track:focus-visible {
-          outline: 2px solid var(--color-surface-raised) !important;
-          outline-offset: 2px !important;
-        }
-
-        @keyframes fadeUp   { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
-        @keyframes fadeIn   { from { opacity:0; } to { opacity:1; } }
-        @keyframes scaleIn  { from { opacity:0; transform:scale(0.95); } to { opacity:1; transform:scale(1); } }
-        @keyframes slideDown{ from { opacity:0; transform:translateY(-10px); } to { opacity:1; transform:translateY(0); } }
-        @keyframes heartPop { 0%{transform:scale(1)} 40%{transform:scale(1.3)} 100%{transform:scale(1)} }
-        @keyframes shimmer   { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
-
-        .profile-fade { animation: fadeUp var(--motion-duration-fast) ease both; }
-        .cover-fade   { animation: fadeIn var(--motion-duration-slow) ease both; }
-        .card-in      { animation: scaleIn var(--motion-duration-fast) ease both; }
-
-        .breadcrumb-link:hover {
-          color: var(--color-surface-raised);
-          text-decoration: underline;
-        }
-
-        .tab-btn {
-          display: flex; align-items: center; gap: 6px;
-          padding: 8px 18px; border-radius: var(--radius-step8); border: none;
-          font-family: var(--font-family-primary); font-weight: 500; font-size: var(--font-size-md);
-          cursor: pointer; transition: all var(--motion-duration-instant) ease; position: relative;
-          background: transparent; color: var(--color-text-inverse);
-          white-space: nowrap;
-        }
-        .tab-btn:hover { background: rgba(0, 181, 102, 0.08); color: var(--color-surface-raised); }
-        .tab-btn[aria-selected="true"] { background: var(--color-surface-raised); color: white; box-shadow: var(--shadow-Btn); }
-
-        .plant-card {
-          background: white; border-radius: var(--radius-md); padding: 14px;
-          border: 1px solid rgba(0, 0, 0, 0.08); transition: all var(--motion-duration-instant) ease;
-          display: flex; flex-direction: column; gap: 10px;
-        }
-        .plant-card:hover { transform: translateY(-3px); box-shadow: var(--card-hover); border-color: rgba(0, 181, 102, 0.16); }
-
-        .order-card {
-          background: white; border-radius: var(--radius-md); padding: 16px;
-          border: 1px solid rgba(0, 0, 0, 0.08); display: flex; gap: 14px;
-          align-items: center; transition: all var(--motion-duration-instant) ease;
-          cursor: pointer;
-        }
-        .order-card:hover { box-shadow: var(--card-hover); border-color: rgba(0, 181, 102, 0.16); }
-
-        .wish-card {
-          background: white; border-radius: var(--radius-md); overflow: hidden;
-          border: 1px solid rgba(0, 0, 0, 0.08); transition: all var(--motion-duration-instant) ease;
-        }
-        .wish-card:hover { transform: translateY(-3px); box-shadow: var(--card-hover); border-color: rgba(0, 181, 102, 0.16); }
-
-        .setting-row {
-          display: flex; justify-content: space-between; align-items: center;
-          padding: 14px 0; border-bottom: 1px solid rgba(0, 0, 0, 0.08);
-        }
-        .setting-row:last-child { border-bottom: none; }
-
-        .toggle-track {
-          width: 44px; height: 24px; border-radius: var(--radius-step8); border: none;
-          cursor: pointer; transition: background var(--motion-duration-instant) ease; position: relative; padding: 0;
-          flex-shrink: 0;
-        }
-        .toggle-thumb {
-          position: absolute; top: 2px; width: 20px; height: 20px;
-          border-radius: 50%; background: white; transition: transform var(--motion-duration-instant) ease;
-          box-shadow: 0 1px 3px rgba(0,0,0,.15);
-        }
-
-        .badge {
-          display: inline-flex; align-items: center; gap: 4px;
-          padding: 3px 8px; border-radius: var(--radius-step8);
-          font-family: var(--font-family-primary); font-weight: 700; font-size: var(--font-size-xs);
-        }
-
-        .stat-box {
-          background: white; border-radius: var(--radius-md); padding: 14px;
-          border: 1px solid rgba(0, 0, 0, 0.08); text-align: center; flex: 1;
-          transition: all var(--motion-duration-instant) ease;
-        }
-        .stat-box:hover { box-shadow: var(--card-hover); border-color: rgba(0, 181, 102, 0.16); transform: translateY(-2px); }
-
-        .achievement-card {
-          background: white; border-radius: var(--radius-md); padding: 12px;
-          border: 1px solid rgba(0, 0, 0, 0.08); display: flex; align-items: center; gap: 12px;
-          transition: all var(--motion-duration-instant) ease;
-        }
-        .achievement-card.unlocked { border-color: rgba(0, 181, 102, 0.16); }
-        .achievement-card:hover { box-shadow: var(--card-hover); }
-
-        /* Inputs states matching §3.6 */
-        .edit-input {
-          width: 100%; border: 1.5px solid rgb(212, 212, 212); border-radius: var(--radius-sm);
-          padding: 10px 14px; font-family: var(--font-family-primary); font-size: var(--font-size-md);
-          color: var(--color-text-secondary); background: var(--color-surface-strong); outline: none;
-          transition: border-color var(--motion-duration-instant) ease, background-color var(--motion-duration-instant) ease;
-        }
-        .edit-input:hover { border-color: rgba(28, 28, 28, 0.5); }
-        .edit-input:focus { border-color: var(--color-surface-raised); background: white; box-shadow: 0 0 0 3px rgba(0, 181, 102, 0.15); }
-        
-        .edit-input.input-error {
-          border-color: #dc2626 !important;
-          background: rgba(220, 38, 38, 0.05) !important;
-        }
-        .edit-input.input-valid {
-          border-color: var(--color-surface-raised) !important;
-        }
-
-        .input-error-msg {
-          color: #dc2626; font-size: var(--font-size-sm); margin-top: 4px; display: flex; align-items: center; gap: 4px;
-        }
-
-        .green-btn {
-          background: var(--color-surface-raised); color: white; border: none; border-radius: var(--radius-step8);
-          font-family: var(--font-family-primary); font-weight: 600; font-size: var(--font-size-xl);
-          padding: 10px 22px; cursor: pointer; transition: all var(--motion-duration-instant) ease;
-          box-shadow: 0 4px 14px rgba(0, 181, 102, 0.25);
-          display: inline-flex; align-items: center; gap: 6px;
-        }
-        .green-btn:hover { background: var(--color-green-mid); transform: scale(1.03); }
-        .green-btn:active { scale: 0.98; background: #008044; }
-
-        .outline-btn {
-          background: transparent; color: var(--color-text-inverse); border: 1.5px solid rgba(0, 0, 0, 0.08);
-          border-radius: var(--radius-step8); font-family: var(--font-family-primary); font-weight: 500;
-          font-size: var(--font-size-xl); padding: 9px 18px; cursor: pointer; transition: all var(--motion-duration-instant) ease;
-        }
-        .outline-btn:hover { border-color: var(--color-surface-raised); color: var(--color-surface-raised); }
-
-        /* Skeleton shimmer load effect */
-        .skeleton {
-          background: rgba(28, 28, 28, 0.08);
-          background-image: linear-gradient(90deg, rgba(28, 28, 28, 0.08) 0%, rgba(255, 255, 255, 0.6) 40%, rgba(28, 28, 28, 0.08) 80%);
-          background-size: 200% 100%;
-          animation: shimmer 1.5s infinite linear;
-          border-radius: var(--radius-sm);
-        }
-
-        /* Reduced Motion rule matching §2.6 */
-        @media (prefers-reduced-motion: reduce) {
-          *, *::before, *::after {
-            animation-duration: 0.01ms !important;
-            animation-iteration-count: 1 !important;
-            transition-duration: 0.01ms !important;
-            scroll-behavior: auto !important;
-          }
-          .skeleton {
-            background: rgba(28, 28, 28, 0.08) !important;
-            animation: none !important;
-          }
-        }
-
-        /* Responsive Breakpoints matching §4.2 */
-        @media (max-width: 1280px) {
-          .profile-container { padding: 0 var(--space-8) * 3 !important; }
-        }
-        @media (max-width: 1024px) {
-          .stats-row { grid-template-columns: repeat(2, 1fr) !important; }
-        }
-        @media (max-width: 768px) {
-          .profile-hero-row { flex-direction: column !important; align-items: center !important; text-align: center !important; }
-          .plants-grid { grid-template-columns: 1fr !important; }
-          .wish-grid { grid-template-columns: repeat(2, 1fr) !important; }
-          .tab-scroll { overflow-x: auto; padding-bottom: 4px; }
-          .tab-scroll::-webkit-scrollbar { display: none; }
-          .cover-actions { right: 12px !important; bottom: 12px !important; }
-          .main-pad { padding: 0 16px !important; }
-          .activity-row { flex-direction: column !important; gap: 24px !important; }
-          .billing-flex { flex-direction: column !important; }
-          .billing-form-col { width: 100% !important; }
-          .settings-flex { flex-direction: column !important; }
-          .settings-side-col { width: 100% !important; }
-          .delete-card-btn { opacity: 1 !important; }
-        }
-        @media (max-width: 480px) {
-          .wish-grid { grid-template-columns: 1fr !important; }
-          .tab-btn { padding: 8px 12px !important; font-size: var(--font-size-sm) !important; }
-          .stats-row { grid-template-columns: 1fr !important; }
-        }
-      `}</style>
-
-      {/* ────────────────────────────────────────────────────────
-         SKIP LINK & NAVBAR
-         ──────────────────────────────────────────────────────── */}
-      <a href="#main-content" className="sr-only focus:not-sr-only">Skip to main content</a>
-      <SharedNavbar cartCount={cartCount} />
-
-      {/* ────────────────────────────────────────────────────────
-         SKELETON LOADER (Initial fetch simulation)
-         ──────────────────────────────────────────────────────── */}
-      {loading ? (
-        <div style={{ maxWidth: 1200, margin: "0 auto", padding: "24px 48px" }} className="main-pad" aria-busy="true" aria-label="Loading Profile Details">
-          {/* Breadcrumb skeleton */}
-          <div className="skeleton" style={{ width: 150, height: 16, marginBottom: 20 }} />
-          
-          {/* Hero Banner skeleton */}
-          <div className="skeleton" style={{ height: 240, borderRadius: 16, marginBottom: 32 }} />
-
-          {/* Hero Row skeleton */}
-          <div style={{ display: "flex", alignItems: "flex-end", gap: 24, marginTop: -50, marginBottom: 32 }}>
-            <div className="skeleton" style={{ width: 100, height: 100, borderRadius: "50%", border: "4px solid white" }} />
-            <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 8 }}>
-              <div className="skeleton" style={{ width: 220, height: 28 }} />
-              <div className="skeleton" style={{ width: "80%", height: 16 }} />
-              <div className="skeleton" style={{ width: 140, height: 14 }} />
+    <section aria-label="Overview" style={{ animation: "slideUp var(--motion-normal) ease" }}>
+      {/* Welcome header */}
+      <div style={{ marginBottom: 32 }}>
+        <h2 style={{ fontSize: 24, fontWeight: 700, color: "var(--profile-heading)", marginBottom: 6 }}>
+          Welcome back, {USER.firstName} 🌿
+        </h2>
+        <p style={{ fontSize: 14, color: "var(--profile-meta)" }}>Here&apos;s what&apos;s growing in your account.</p>
+      </div>
+      {/* Quick stats */}
+      <div className="stats-grid" style={{ marginBottom: 24 }}>
+        {stats.map(s => (
+          <button key={s.section} onClick={() => onNavigate(s.section)} aria-label={`${s.value} ${s.label}`}
+            style={{ background: "var(--profile-card-bg)", border: "1px solid var(--profile-card-border)", borderRadius: "var(--radius-md)", padding: 20, textAlign: "center", cursor: "pointer", boxShadow: "var(--shadow-card)", transition: "all var(--motion-fast) ease", display: "block" }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = "translateY(-3px)"; (e.currentTarget as HTMLElement).style.boxShadow = "0 8px 28px rgba(28,28,28,0.12)"; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = "translateY(0)"; (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-card)"; }}
+          >
+            <div style={{ fontSize: 24, marginBottom: 4 }}>{s.icon}</div>
+            <div style={{ fontSize: 32, fontWeight: 800, color: "var(--color-surface-raised)", lineHeight: 1 }}>{s.value}</div>
+            <div style={{ fontSize: 13, color: "var(--profile-meta)", marginTop: 4 }}>{s.label}</div>
+          </button>
+        ))}
+      </div>
+      {/* Recent order */}
+      <div className="profile-card" style={{ marginBottom: 16 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+          <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--profile-heading)" }}>Recent Order</h3>
+          <button onClick={() => onNavigate("orders")} style={{ background: "none", border: "none", color: "var(--color-surface-raised)", fontWeight: 600, fontSize: 13, cursor: "pointer", fontFamily: "Outfit" }}>View All Orders →</button>
+        </div>
+        <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
+          <div style={{ width: 56, height: 56, borderRadius: "var(--radius-sm)", background: "rgba(0,181,102,0.08)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, flexShrink: 0 }}>{recentOrder.items[0].img}</div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, flexWrap: "wrap" }}>
+              <div>
+                <p style={{ fontSize: 14, fontWeight: 600, color: "var(--profile-heading)" }}>{recentOrder.items[0].name}</p>
+                {recentOrder.items.length > 1 && <p style={{ fontSize: 12, color: "var(--profile-meta)" }}>+ {recentOrder.items.length - 1} more items</p>}
+                <p style={{ fontSize: 15, fontWeight: 700, color: "var(--profile-heading)", marginTop: 4 }}>{recentOrder.total}</p>
+              </div>
+              <div style={{ textAlign: "right" }}>
+                <p style={{ fontSize: 9, color: "var(--profile-meta)" }}>Order #{recentOrder.id}</p>
+                <p style={{ fontSize: 9, color: "var(--profile-meta)" }}>{recentOrder.date}</p>
+                <span className={`badge-status ${statusInfo.cls}`} style={{ marginTop: 6, display: "inline-flex" }}>{statusInfo.icon} {statusInfo.label}</span>
+              </div>
             </div>
-            <div className="skeleton" style={{ width: 120, height: 38, borderRadius: 20 }} />
           </div>
-
-          {/* Stats skeleton */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14, marginBottom: 32 }}>
-            {[1, 2, 3, 4].map(i => (
-              <div key={i} className="skeleton" style={{ height: 120, borderRadius: 12 }} />
-            ))}
+        </div>
+        <div style={{ display: "flex", gap: 10, marginTop: 14, flexWrap: "wrap" }}>
+          <button className="btn-profile-primary" style={{ height: 36, fontSize: 13 }}>Track Order →</button>
+          <button className="btn-profile-outline" style={{ height: 36, fontSize: 13 }}>Buy Again</button>
+        </div>
+      </div>
+      {/* Wishlist preview */}
+      <div className="profile-card" style={{ marginBottom: 16 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+          <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--profile-heading)" }}>Wishlist <span style={{ color: "var(--profile-meta)", fontWeight: 400 }}>({WISHLIST_ITEMS.length})</span></h3>
+          <button onClick={() => onNavigate("wishlist")} style={{ background: "none", border: "none", color: "var(--color-surface-raised)", fontWeight: 600, fontSize: 13, cursor: "pointer", fontFamily: "Outfit" }}>View All →</button>
+        </div>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          {WISHLIST_ITEMS.slice(0, 4).map(item => (
+            <div key={item.id} style={{ width: 64, textAlign: "center" }}>
+              <div style={{ width: 64, height: 64, borderRadius: "var(--radius-sm)", background: "rgba(0,181,102,0.06)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, marginBottom: 4, border: "1px solid var(--profile-divider)" }}>{item.img}</div>
+              <p style={{ fontSize: 10, color: "var(--profile-meta)", lineHeight: 1.3 }}>{item.name}</p>
+            </div>
+          ))}
+          <div style={{ width: 64, height: 64, borderRadius: "var(--radius-sm)", background: "var(--profile-divider)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, color: "var(--profile-meta)" }}>+{WISHLIST_ITEMS.length - 4}</div>
+        </div>
+      </div>
+      {/* Loyalty card */}
+      <div style={{ background: "var(--profile-points-bg)", border: "1px solid var(--color-surface-raised)", borderRadius: "var(--radius-xl)", padding: 24 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
+          <div>
+            <p style={{ fontSize: 12, color: "var(--profile-meta)", marginBottom: 4 }}>🏅 Green Points</p>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+              <span style={{ fontSize: 36, fontWeight: 800, color: "var(--color-surface-raised)" }}>{USER.points}</span>
+              <span style={{ fontSize: 14, color: "var(--profile-meta)" }}>points</span>
+            </div>
           </div>
-
-          {/* Tabbar skeleton */}
-          <div className="skeleton" style={{ width: 450, height: 42, borderRadius: 20, marginBottom: 28 }} />
-
-          {/* Main Grid skeleton */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 18 }}>
-            {[1, 2, 3].map(i => (
-              <div key={i} className="skeleton" style={{ height: 280, borderRadius: 16 }} />
-            ))}
+          <div style={{ textAlign: "right" }}>
+            <p style={{ fontSize: 13, color: "var(--profile-meta)" }}>Next: Silver at 500 pts</p>
+            <p style={{ fontSize: 12, fontWeight: 600, color: "var(--color-surface-raised)", marginTop: 4 }}>{Math.round((USER.points / 500) * 100)}% to Silver</p>
           </div>
+        </div>
+        <div className="loyalty-progress-track" style={{ marginBottom: 6 }}>
+          <div className="loyalty-progress-fill" style={{ width: `${(USER.points / 500) * 100}%` }} role="progressbar" aria-label={`${USER.points} of 500 points to Silver tier`} aria-valuenow={USER.points} aria-valuemin={0} aria-valuemax={500} />
+        </div>
+        <p style={{ fontSize: 12, fontWeight: 600, color: "var(--color-surface-raised)", textAlign: "right" }}>{USER.points} / 500</p>
+        <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
+          <button className="btn-profile-primary" style={{ flex: 1, justifyContent: "center", height: 40, fontSize: 14 }} onClick={() => onNavigate("loyalty")}>Redeem Points</button>
+          <button className="btn-profile-outline" style={{ flex: 1, justifyContent: "center", height: 40, fontSize: 14 }}>How it Works</button>
+        </div>
+      </div>
+    </section>
+  );
+}
+/* ─────────────────────────────────────────────
+   SECTION: MY ORDERS
+───────────────────────────────────────────── */
+function OrdersSection({ onToast }: { onToast: (msg: string, t?: ToastType["type"]) => void }) {
+  const [activeTab, setActiveTab] = useState("all");
+  const [search, setSearch] = useState("");
+  const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
+  const [trackingOrder, setTrackingOrder] = useState<typeof ORDERS[0] | null>(null);
+  const tabs = ["all", "active", "delivered", "cancelled"];
+  const filtered = ORDERS.filter(o => {
+    if (activeTab === "active") return o.status === "processing" || o.status === "shipped";
+    if (activeTab !== "all") return o.status === activeTab;
+    return true;
+  }).filter(o => o.id.toLowerCase().includes(search.toLowerCase()) || o.items.some(i => i.name.toLowerCase().includes(search.toLowerCase())));
+  const TRACKING_STEPS = [
+    { label: "Order Placed", time: "15 Jun — 10:24 AM", status: "completed" },
+    { label: "Packed", time: "15 Jun — 2:48 PM", status: "completed" },
+    { label: "Dispatched", time: "16 Jun — 9:00 AM", status: "completed" },
+    { label: "Out for Delivery", time: "17 Jun", status: "current" },
+    { label: "Delivered", time: "18 Jun", status: "pending" },
+  ];
+  return (
+    <section aria-label="My Orders" style={{ animation: "slideUp var(--motion-normal) ease" }}>
+      <div className="section-hdr">
+        <h2 className="section-title-lg">My Orders <span className="section-count">({ORDERS.length})</span></h2>
+      </div>
+      {/* Filter tabs */}
+      <div className="filter-tabs" role="tablist" aria-label="Order filters" style={{ marginBottom: 16 }}>
+        {tabs.map(t => (
+          <button key={t} className={`filter-tab ${activeTab === t ? "active" : ""}`} role="tab" aria-selected={activeTab === t} onClick={() => setActiveTab(t)}>
+            {t.charAt(0).toUpperCase() + t.slice(1)} {t === "all" ? `(${ORDERS.length})` : t === "delivered" ? "(8)" : t === "active" ? "(2)" : "(2)"}
+          </button>
+        ))}
+      </div>
+      {/* Search + sort */}
+      <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
+        <div style={{ position: "relative", flex: 1, minWidth: 200 }}>
+          <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", fontSize: 14, color: "var(--profile-meta)" }}>🔍</span>
+          <input className="profile-input" style={{ paddingLeft: 38 }} placeholder="Search orders..." value={search} onChange={e => setSearch(e.target.value)} aria-label="Search orders" />
+        </div>
+        <select className="profile-select" style={{ width: 160 }} aria-label="Sort orders">
+          <option>Newest First</option>
+          <option>Oldest First</option>
+          <option>Highest Value</option>
+          <option>Lowest Value</option>
+        </select>
+      </div>
+      {/* Order cards */}
+      {filtered.length === 0 ? (
+        <div className="empty-state">
+          <div className="empty-state-icon">📦</div>
+          <h3>No orders yet</h3>
+          <p>Start exploring our plants and bring green into your space.</p>
+          <Link href="/"><button className="btn-profile-primary">Shop Plants</button></Link>
         </div>
       ) : (
-        <main id="main-content">
-          
-          {/* ────────────────────────────────────────────────────────
-             BREADCRUMBS (§3.16)
-             ──────────────────────────────────────────────────────── */}
-          <nav aria-label="Breadcrumb" style={{ maxWidth: 1200, margin: "0 auto", padding: "12px 48px" }} className="main-pad">
-            <ol style={{ display: "flex", listStyle: "none", fontSize: "var(--font-size-md)", color: "var(--color-text-inverse)" }}>
-              <li style={{ display: "flex", alignItems: "center" }}>
-                <Link href="/" className="breadcrumb-link" style={{ transition: "color var(--motion-duration-instant)" }}>Home</Link>
-                <span style={{ margin: "0 var(--space-7)", color: "rgba(0,0,0,0.2)" }} aria-hidden="true">/</span>
-              </li>
-              <li aria-current="page" style={{ fontWeight: 600, color: "var(--color-text-secondary)" }}>
-                Profile
-              </li>
-            </ol>
-          </nav>
-
-          {/* ────────────────────────────────────────────────────────
-             COVER BANNER IMAGE
-             ──────────────────────────────────────────────────────── */}
-          <div className="cover-fade" style={{ position: "relative", height: 240, background: `linear-gradient(135deg, #0b3f2c 0%, #009952 50%, #00b566 100%)`, overflow: "hidden" }}>
-            {/* Decorative plant layout icons */}
-            {[
-              { top: "10%", left: "5%", size: 80, rotate: "-20deg", opacity: 0.18 },
-              { top: "20%", right: "8%", size: 120, rotate: "30deg", opacity: 0.14 },
-              { bottom: "5%", left: "20%", size: 60, rotate: "45deg", opacity: 0.12 },
-              { bottom: "10%", right: "25%", size: 90, rotate: "-40deg", opacity: 0.12 },
-            ].map((s, i) => (
-              <div key={i} style={{ position: "absolute", top: s.top, left: s.left, right: s.right, bottom: s.bottom, transform: `rotate(${s.rotate})`, opacity: s.opacity, pointerEvents: "none", fontSize: s.size }}>
-                🌿
+        filtered.map(order => {
+          const si = getStatusStyle(order.status);
+          const isExpanded = expandedItems[order.id];
+          const visibleItems = isExpanded ? order.items : order.items.slice(0, 2);
+          return (
+            <div key={order.id} className="profile-card" style={{ marginBottom: 16 }}>
+              {/* Header */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, gap: 8, flexWrap: "wrap" }}>
+                <span style={{ fontSize: 15, fontWeight: 700, color: "var(--profile-heading)" }}>Order #{order.id}</span>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <span style={{ fontSize: 9, color: "var(--profile-meta)" }}>{order.date}</span>
+                  <span className={`badge-status ${si.cls}`} aria-label={`Order status: ${si.label}`}>{si.icon} {si.label}</span>
+                </div>
+              </div>
+              {/* Items */}
+              {visibleItems.map((item, i) => (
+                <div key={i} style={{ display: "flex", gap: 12, paddingBottom: 12, borderBottom: i < visibleItems.length - 1 ? "1px solid var(--profile-divider)" : "none", marginBottom: i < visibleItems.length - 1 ? 12 : 0, alignItems: "center" }}>
+                  <div style={{ width: 56, height: 56, borderRadius: "var(--radius-sm)", background: "rgba(0,181,102,0.06)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, flexShrink: 0, border: "1px solid var(--profile-divider)" }}>{item.img}</div>
+                  <div style={{ flex: 1 }}>
+                    <p style={{ fontSize: 14, fontWeight: 600, color: "var(--profile-heading)" }}>{item.name}</p>
+                    <p style={{ fontSize: 12, color: "var(--profile-meta)" }}>— {item.variant}</p>
+                  </div>
+                  <p style={{ fontSize: 14, color: "var(--profile-body)" }}>{item.price} × {item.qty}</p>
+                </div>
+              ))}
+              {order.items.length > 2 && (
+                <button onClick={() => setExpandedItems(e => ({ ...e, [order.id]: !e[order.id] }))} aria-expanded={isExpanded}
+                  style={{ background: "none", border: "none", color: "var(--color-surface-raised)", fontWeight: 600, fontSize: 12, cursor: "pointer", marginTop: 8, fontFamily: "Outfit" }}>
+                  {isExpanded ? "Show less" : `+ ${order.items.length - 2} more items`}
+                </button>
+              )}
+              {/* Total */}
+              <div style={{ borderTop: "1px solid var(--profile-divider)", marginTop: 14, paddingTop: 12, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ fontSize: 15, fontWeight: 700, color: "var(--profile-heading)" }}>Total: {order.total}</span>
+                <span style={{ fontSize: 12, color: "var(--profile-meta)" }}>incl. {order.delivery === "₹0" ? "free" : order.delivery} delivery</span>
+              </div>
+              {/* Actions */}
+              <div style={{ display: "flex", gap: 10, marginTop: 14, flexWrap: "wrap", alignItems: "center" }}>
+                {(order.status === "delivered" || order.status === "shipped") && (
+                  <button className="btn-profile-primary" style={{ height: 38, fontSize: 13 }} onClick={() => setTrackingOrder(order)}>Track Order →</button>
+                )}
+                {order.status === "delivered" && <button className="btn-profile-outline" style={{ height: 38, fontSize: 13 }} onClick={() => onToast("Review submitted! Thank you.", "success")}>Write a Review</button>}
+                <button className="btn-profile-outline" style={{ height: 38, fontSize: 13 }} onClick={() => onToast("Items added to cart!", "success")}>Buy Again</button>
+                {order.status === "delivered" && <button style={{ background: "none", border: "none", color: "var(--profile-danger-text)", fontSize: 13, cursor: "pointer", fontFamily: "Outfit", fontWeight: 500, padding: "0 8px" }}>Return / Exchange</button>}
+                {order.status === "processing" && <button style={{ background: "none", border: "none", color: "var(--profile-danger-text)", fontSize: 13, cursor: "pointer", fontFamily: "Outfit", fontWeight: 500, padding: "0 8px" }} onClick={() => onToast("Cancellation requested.", "info")}>Cancel Order</button>}
+              </div>
+            </div>
+          );
+        })
+      )}
+      {/* Tracking Modal */}
+      {trackingOrder && (
+        <Modal title={`Order #${trackingOrder.id} — Tracking`} onClose={() => setTrackingOrder(null)} maxWidth={520}>
+          <p style={{ fontSize: 13, color: "var(--profile-meta)", marginBottom: 20 }}>Estimated delivery: <strong style={{ color: "var(--profile-heading)" }}>18 Jun 2026</strong></p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+            {TRACKING_STEPS.map((step, i) => (
+              <div key={i} className={`track-step ${step.status}`}>
+                <div className={`track-dot ${step.status}`}>{step.status === "completed" ? "✓" : ""}</div>
+                <div style={{ flex: 1, paddingBottom: i < TRACKING_STEPS.length - 1 ? 16 : 0 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <p style={{ fontSize: 14, fontWeight: step.status !== "pending" ? 600 : 400, color: step.status !== "pending" ? "var(--profile-heading)" : "var(--profile-meta)" }}>{step.label}</p>
+                    {step.status === "current" && <span style={{ background: "var(--color-surface-raised)", color: "#fff", fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: "var(--radius-full)" }}>← Current</span>}
+                  </div>
+                  <p style={{ fontSize: 9, color: "var(--profile-meta)", marginTop: 2 }}>{step.time}</p>
+                </div>
               </div>
             ))}
-
-            {/* Banner visual elements */}
-            <img src="/monstera.png" alt="" aria-hidden="true" style={{ position: "absolute", right: 60, bottom: 0, height: 220, opacity: 0.22, objectFit: "contain", pointerEvents: "none" }} />
-            <img src="/fern-large.png" alt="" aria-hidden="true" style={{ position: "absolute", left: 80, bottom: 0, height: 180, opacity: 0.18, objectFit: "contain", pointerEvents: "none" }} />
-
-            {/* Actions overlay */}
-            <div className="cover-actions" style={{ position: "absolute", right: 24, bottom: 20, display: "flex", gap: 8 }}>
-              <button 
-                onClick={() => addToast("Cover banner upload dialog opened (mocked).")}
-                style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(255,255,255,0.18)", backdropFilter: "blur(8px)", border: "1px solid rgba(255,255,255,0.3)", color: "white", borderRadius: "var(--radius-step8)", padding: "7px 14px", fontSize: 12, fontWeight: 500, transition: "all var(--motion-duration-instant) ease", cursor: "pointer" }}
-              >
-                <CameraIcon /> Change Cover
+          </div>
+          <div style={{ marginTop: 20, paddingTop: 16, borderTop: "1px solid var(--profile-divider)" }}>
+            <p style={{ fontSize: 13, color: "var(--profile-meta)" }}>Carrier: Shiprocket · Tracking ID: SR-8821</p>
+            <button className="btn-profile-outline" style={{ marginTop: 10, fontSize: 13 }}>View on Carrier Site ↗</button>
+          </div>
+        </Modal>
+      )}
+    </section>
+  );
+}
+/* ─────────────────────────────────────────────
+   SECTION: WISHLIST
+───────────────────────────────────────────── */
+function WishlistSection({ onToast }: { onToast: (msg: string, t?: ToastType["type"], onUndo?: () => void) => void }) {
+  const [items, setItems] = useState(WISHLIST_ITEMS);
+  const [selected, setSelected] = useState<number[]>([]);
+  const allSelected = selected.length === items.length && items.length > 0;
+  const removeItem = (id: number) => {
+    const item = items.find(i => i.id === id);
+    setItems(prev => prev.filter(i => i.id !== id));
+    setSelected(prev => prev.filter(s => s !== id));
+    onToast(`${item?.name} removed from wishlist`, "success", () => setItems(WISHLIST_ITEMS));
+  };
+  const toggleSelect = (id: number) => setSelected(prev => prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]);
+  const toggleAll = () => setSelected(allSelected ? [] : items.map(i => i.id));
+  return (
+    <section aria-label="Wishlist" style={{ animation: "slideUp var(--motion-normal) ease" }}>
+      <div className="section-hdr">
+        <h2 className="section-title-lg">Wishlist <span className="section-count">({items.length})</span></h2>
+        <select className="profile-select" style={{ width: 160 }}>
+          <option>Recently Added</option>
+          <option>Price: Low to High</option>
+          <option>Price: High to Low</option>
+        </select>
+      </div>
+      {/* Bulk actions bar */}
+      <div style={{ display: "flex", gap: 12, marginBottom: 16, alignItems: "center", flexWrap: "wrap" }}>
+        <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 13, color: "var(--profile-body)" }}>
+          <input type="checkbox" aria-label="Select all wishlist items" checked={allSelected} onChange={toggleAll}
+            style={{ width: 18, height: 18, accentColor: "var(--color-surface-raised)", cursor: "pointer" }} />
+          Select All
+        </label>
+        <button
+          disabled={selected.length === 0}
+          aria-disabled={selected.length === 0}
+          onClick={() => { onToast(`${selected.length} items added to cart!`, "success"); setSelected([]); }}
+          style={{ height: 36, fontSize: 13, opacity: selected.length === 0 ? 0.4 : 1, background: "var(--profile-cta-bg)", color: "#fff", borderRadius: "var(--radius-full)", border: "none", cursor: selected.length === 0 ? "not-allowed" : "pointer", padding: "0 16px", fontWeight: 600, fontFamily: "Outfit", display: "inline-flex", alignItems: "center", gap: 6 }}>
+          🛒 Add Selected ({selected.length})
+        </button>
+        <button
+          disabled={selected.length === 0}
+          aria-disabled={selected.length === 0}
+          onClick={() => { setItems(prev => prev.filter(i => !selected.includes(i.id))); setSelected([]); onToast("Selected items removed", "success"); }}
+          style={{ height: 36, fontSize: 13, opacity: selected.length === 0 ? 0.4 : 1, background: "transparent", color: "var(--profile-danger-text)", borderRadius: "var(--radius-full)", border: "1px solid var(--profile-danger-border)", cursor: selected.length === 0 ? "not-allowed" : "pointer", padding: "0 16px", fontWeight: 600, fontFamily: "Outfit", display: "inline-flex", alignItems: "center", gap: 6 }}>
+          🗑 Remove ({selected.length})
+        </button>
+      </div>
+      {items.length === 0 ? (
+        <div className="empty-state">
+          <div className="empty-state-icon">♡</div>
+          <h3>Your wishlist is empty</h3>
+          <p>Save plants you love and find them here later.</p>
+          <Link href="/"><button className="btn-profile-primary">Explore Plants</button></Link>
+        </div>
+      ) : (
+        <div className="wishlist-grid">
+          {items.map(item => (
+            <div key={item.id} style={{ position: "relative", background: "var(--profile-card-bg)", border: `1px solid ${selected.includes(item.id) ? "var(--color-surface-raised)" : "var(--profile-card-border)"}`, borderRadius: "var(--radius-md)", overflow: "hidden", boxShadow: "var(--shadow-card)", transition: "all var(--motion-fast) ease" }}>
+              {/* Checkbox overlay */}
+              <div style={{ position: "absolute", top: 10, left: 10, zIndex: 2 }}>
+                <input type="checkbox" checked={selected.includes(item.id)} onChange={() => toggleSelect(item.id)}
+                  style={{ width: 18, height: 18, accentColor: "var(--color-surface-raised)", cursor: "pointer" }} aria-label={`Select ${item.name}`} />
+              </div>
+              {/* Remove btn */}
+              <button onClick={() => removeItem(item.id)} aria-label={`Remove ${item.name} from wishlist`}
+                style={{ position: "absolute", top: 8, right: 8, zIndex: 2, width: 28, height: 28, borderRadius: "50%", background: "rgba(255,255,255,0.9)", border: "1px solid var(--profile-divider)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, color: "var(--profile-meta)" }}>
+                ✕
+              </button>
+              {/* Image */}
+              <div style={{ height: 120, background: "rgba(0,181,102,0.05)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 52, position: "relative" }}>
+                {!item.inStock && (
+                  <div style={{ position: "absolute", inset: 0, background: "rgba(255,255,255,0.7)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: "var(--profile-meta)" }}>Out of Stock</span>
+                  </div>
+                )}
+                {item.img}
+              </div>
+              {/* Info */}
+              <div style={{ padding: "12px 12px 14px" }}>
+                <p style={{ fontSize: 13, fontWeight: 600, color: "var(--profile-heading)", marginBottom: 4 }}>{item.name}</p>
+                <div style={{ display: "flex", gap: 6, alignItems: "baseline", marginBottom: 10 }}>
+                  <span style={{ fontSize: 15, fontWeight: 700, color: "var(--color-surface-raised)" }}>{item.price}</span>
+                  {item.originalPrice && <span style={{ fontSize: 12, color: "var(--profile-meta)", textDecoration: "line-through" }}>{item.originalPrice}</span>}
+                </div>
+                {item.inStock ? (
+                  <button className="btn-profile-primary" style={{ width: "100%", justifyContent: "center", height: 36, fontSize: 13 }} onClick={() => onToast(`${item.name} added to cart!`, "success")}>
+                    🛒 Move to Cart
+                  </button>
+                ) : (
+                  <button className="btn-profile-outline" style={{ width: "100%", justifyContent: "center", height: 36, fontSize: 13 }}>
+                    Notify Me
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+/* ─────────────────────────────────────────────
+   SECTION: MY PLANTS
+───────────────────────────────────────────── */
+function PlantsSection({ onToast }: { onToast: (msg: string, t?: ToastType["type"]) => void }) {
+  const [plants, setPlants] = useState(PLANTS);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [newPlant, setNewPlant] = useState({ name: "", nickname: "", location: "", date: "" });
+  const handleAddPlant = (e: React.FormEvent) => {
+    e.preventDefault();
+    setPlants(prev => [...prev, { id: Date.now(), name: newPlant.name || "New Plant", added: new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }), location: newPlant.location || "Unknown", waterDays: 7, light: "Medium Light", temp: "65–85°F", repot: "2027", img: "🌱", waterStatus: "good" }]);
+    setShowAddModal(false);
+    setNewPlant({ name: "", nickname: "", location: "", date: "" });
+    onToast("Plant added to your collection! 🌱", "success");
+  };
+  return (
+    <section aria-label="My Plants" style={{ animation: "slideUp var(--motion-normal) ease" }}>
+      <div className="section-hdr">
+        <h2 className="section-title-lg">My Plants <span className="section-count">({plants.length})</span></h2>
+        <button className="btn-profile-primary" onClick={() => setShowAddModal(true)}>+ Add a Plant</button>
+      </div>
+      {plants.length === 0 ? (
+        <div className="empty-state">
+          <div className="empty-state-icon">🌱</div>
+          <h3>No plants yet</h3>
+          <p>Add the plants you own and we&apos;ll help you care for them.</p>
+          <button className="btn-profile-primary" onClick={() => setShowAddModal(true)}>+ Add Your First Plant</button>
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          {plants.map(plant => {
+            const waterInfo = getWaterColor(plant.waterStatus);
+            return (
+              <div key={plant.id} className="profile-card">
+                <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
+                  {/* Plant image */}
+                  <div style={{ width: 100, height: 100, borderRadius: "var(--radius-md)", background: "rgba(0,181,102,0.06)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 48, flexShrink: 0, border: "1px solid var(--profile-divider)" }}>{plant.img}</div>
+                  {/* Plant info */}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                      <div>
+                        <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--profile-heading)", marginBottom: 3 }}>{plant.name}</h3>
+                        <p style={{ fontSize: 9, color: "var(--profile-meta)" }}>Added: {plant.added}</p>
+                        <p style={{ fontSize: 12, color: "var(--profile-meta)", marginTop: 2 }}>📍 {plant.location}</p>
+                      </div>
+                      <button style={{ background: "none", border: "1px solid var(--profile-divider)", borderRadius: "var(--radius-sm)", width: 32, height: 32, cursor: "pointer", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center" }} aria-label="More options" aria-haspopup="menu">⋮</button>
+                    </div>
+                    {/* Care indicators */}
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 16px", marginTop: 10 }}>
+                      <p style={{ fontSize: 12, fontWeight: 600, color: waterInfo.color }}>💧 {waterInfo.label}</p>
+                      <p style={{ fontSize: 12, color: "var(--profile-meta)" }}>☀️ {plant.light}</p>
+                      <p style={{ fontSize: 12, color: "var(--profile-meta)" }}>🌡 {plant.temp}</p>
+                      <p style={{ fontSize: 12, color: "var(--profile-meta)" }}>🪴 Repot: {plant.repot}</p>
+                    </div>
+                  </div>
+                </div>
+                {/* Card actions */}
+                <div style={{ borderTop: "1px solid var(--profile-divider)", marginTop: 14, paddingTop: 12, display: "flex", gap: 10, flexWrap: "wrap" }}>
+                  <button className="btn-profile-outline" style={{ height: 36, fontSize: 13 }} onClick={() => onToast(`Watering logged for ${plant.name} 💧`, "success")}>💧 Log Watering</button>
+                  <button className="btn-profile-outline" style={{ height: 36, fontSize: 13 }} onClick={() => onToast("Note added!", "success")}>📝 Add Note</button>
+                  <button style={{ background: "none", border: "none", color: "var(--color-surface-raised)", fontWeight: 600, fontSize: 13, cursor: "pointer", fontFamily: "Outfit", textDecoration: "underline" }}>View Care Guide</button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {/* Add Plant Modal */}
+      {showAddModal && (
+        <Modal title="Add a Plant" onClose={() => setShowAddModal(false)} maxWidth={480}
+          footer={<><button type="button" className="btn-profile-outline" onClick={() => setShowAddModal(false)} style={{ flex: 1, justifyContent: "center" }}>Cancel</button><button type="submit" form="add-plant-form" className="btn-profile-primary" style={{ flex: 1, justifyContent: "center" }}>Save Plant</button></>}>
+          <form id="add-plant-form" onSubmit={handleAddPlant}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              <div>
+                <label style={{ display: "block", fontSize: 15, fontWeight: 600, color: "var(--profile-heading)", marginBottom: 6 }}>Plant Name *</label>
+                <input className="profile-input" placeholder="Monstera Deliciosa" value={newPlant.name} onChange={e => setNewPlant(p => ({ ...p, name: e.target.value }))} required />
+              </div>
+              <div>
+                <label style={{ display: "block", fontSize: 15, fontWeight: 600, color: "var(--profile-heading)", marginBottom: 6 }}>Nickname</label>
+                <input className="profile-input" placeholder="My Monstera" value={newPlant.nickname} onChange={e => setNewPlant(p => ({ ...p, nickname: e.target.value }))} />
+              </div>
+              <div>
+                <label style={{ display: "block", fontSize: 15, fontWeight: 600, color: "var(--profile-heading)", marginBottom: 6 }}>Date Added *</label>
+                <input className="profile-input" type="date" value={newPlant.date} onChange={e => setNewPlant(p => ({ ...p, date: e.target.value }))} required />
+              </div>
+              <div>
+                <label style={{ display: "block", fontSize: 15, fontWeight: 600, color: "var(--profile-heading)", marginBottom: 6 }}>Location</label>
+                <input className="profile-input" placeholder="Living Room" value={newPlant.location} onChange={e => setNewPlant(p => ({ ...p, location: e.target.value }))} />
+              </div>
+              <div>
+                <label style={{ display: "block", fontSize: 15, fontWeight: 600, color: "var(--profile-heading)", marginBottom: 6 }}>Photo</label>
+                <button type="button" className="btn-profile-outline" style={{ width: "100%", justifyContent: "center" }}>📷 Take Photo / Upload</button>
+              </div>
+            </div>
+          </form>
+        </Modal>
+      )}
+    </section>
+  );
+}
+/* ─────────────────────────────────────────────
+   SECTION: PERSONAL INFO
+───────────────────────────────────────────── */
+function PersonalInfoSection({ onToast }: { onToast: (msg: string, t?: ToastType["type"]) => void }) {
+  const [form, setForm] = useState({ firstName: USER.firstName, lastName: USER.lastName, email: USER.email, phone: USER.phone, dob: USER.dob, gender: USER.gender, about: USER.about, language: USER.language, currency: USER.currency });
+  const [saving, setSaving] = useState(false);
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    await new Promise(r => setTimeout(r, 900));
+    setSaving(false);
+    onToast("Profile updated successfully ✓", "success");
+  };
+  const aboutLength = form.about.length;
+  return (
+    <section aria-label="Personal Information" style={{ animation: "slideUp var(--motion-normal) ease" }}>
+      <div className="section-hdr">
+        <h2 className="section-title-lg">Personal Information</h2>
+      </div>
+      {/* Avatar section */}
+      <div className="profile-card" style={{ marginBottom: 20 }}>
+        <h3 style={{ fontSize: 15, fontWeight: 600, color: "var(--profile-heading)", marginBottom: 16 }}>Profile Photo</h3>
+        <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
+          <div style={{ position: "relative", width: 80, height: 80 }}>
+            <div style={{ width: 80, height: 80, borderRadius: "50%", background: "var(--profile-avatar-bg)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, fontWeight: 700, color: "var(--profile-avatar-text)" }}>{USER.initials}</div>
+            <button aria-label="Change profile photo"
+              style={{ position: "absolute", inset: 0, borderRadius: "50%", background: "rgba(0,0,0,0.4)", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, opacity: 0, transition: "opacity var(--motion-instant)" }}
+              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.opacity = "1"; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.opacity = "0"; }}>
+              📷
+            </button>
+          </div>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <button className="btn-profile-outline" style={{ height: 36, fontSize: 13 }}>Change Photo</button>
+            <button style={{ background: "none", border: "none", color: "var(--profile-danger-text)", fontWeight: 500, fontSize: 13, cursor: "pointer", fontFamily: "Outfit" }}>Remove Photo</button>
+          </div>
+        </div>
+        <p style={{ fontSize: 12, color: "var(--profile-meta)", marginTop: 10 }}>JPG, PNG or WebP. Max 5MB.</p>
+      </div>
+      {/* Email verification banner */}
+      <div role="alert" aria-live="assertive" style={{ background: "rgba(217,119,6,0.08)", borderLeft: "4px solid #d97706", borderRadius: "var(--radius-sm)", padding: "12px 16px", marginBottom: 20, display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+        <span>⚠️</span>
+        <p style={{ fontSize: 14, color: "var(--profile-heading)", flex: 1 }}>Verify your email — We sent a link to {form.email}</p>
+        <div style={{ display: "flex", gap: 10 }}>
+          <button style={{ background: "none", border: "none", color: "var(--color-surface-raised)", fontWeight: 600, fontSize: 13, cursor: "pointer", fontFamily: "Outfit" }} onClick={() => onToast("Verification email resent!", "info")}>Resend Email</button>
+          <button style={{ background: "none", border: "none", color: "var(--profile-meta)", fontWeight: 500, fontSize: 13, cursor: "pointer", fontFamily: "Outfit" }}>Change Email</button>
+        </div>
+      </div>
+      <form onSubmit={handleSave}>
+        <div className="profile-card">
+          <div className="form-grid-2" style={{ gap: 16 }}>
+            <div>
+              <label style={{ display: "block", fontSize: 15, fontWeight: 600, color: "var(--profile-heading)", marginBottom: 6 }}>First Name *</label>
+              <input className="profile-input" value={form.firstName} onChange={e => setForm(f => ({ ...f, firstName: e.target.value }))} required maxLength={50} aria-required="true" />
+            </div>
+            <div>
+              <label style={{ display: "block", fontSize: 15, fontWeight: 600, color: "var(--profile-heading)", marginBottom: 6 }}>Last Name *</label>
+              <input className="profile-input" value={form.lastName} onChange={e => setForm(f => ({ ...f, lastName: e.target.value }))} required maxLength={50} />
+            </div>
+            <div>
+              <label style={{ display: "block", fontSize: 15, fontWeight: 600, color: "var(--profile-heading)", marginBottom: 6 }}>Email Address *</label>
+              <input className="profile-input" type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} required />
+            </div>
+            <div>
+              <label style={{ display: "block", fontSize: 15, fontWeight: 600, color: "var(--profile-heading)", marginBottom: 6 }}>Phone Number</label>
+              <input className="profile-input" type="tel" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="+91 98765 43210" />
+            </div>
+            <div>
+              <label style={{ display: "block", fontSize: 15, fontWeight: 600, color: "var(--profile-heading)", marginBottom: 6 }}>Date of Birth</label>
+              <input className="profile-input" type="date" value={form.dob} onChange={e => setForm(f => ({ ...f, dob: e.target.value }))} />
+            </div>
+            <div>
+              <label style={{ display: "block", fontSize: 15, fontWeight: 600, color: "var(--profile-heading)", marginBottom: 6 }}>Gender</label>
+              <select className="profile-select" value={form.gender} onChange={e => setForm(f => ({ ...f, gender: e.target.value }))}>
+                <option>Male</option><option>Female</option><option>Non-binary</option><option>Prefer not to say</option>
+              </select>
+            </div>
+          </div>
+          <div style={{ marginTop: 16 }}>
+            <label style={{ display: "block", fontSize: 15, fontWeight: 600, color: "var(--profile-heading)", marginBottom: 6 }}>About Me</label>
+            <textarea className="profile-textarea" value={form.about} onChange={e => setForm(f => ({ ...f, about: e.target.value }))} maxLength={240} placeholder="Describe yourself as a plant lover..." aria-live="polite" />
+            <p style={{ fontSize: 9, textAlign: "right", color: aboutLength >= 192 ? (aboutLength >= 240 ? "var(--profile-danger-text)" : "var(--profile-status-processing)") : "var(--profile-meta)", marginTop: 4 }}>{aboutLength} / 240</p>
+          </div>
+          <div className="form-grid-2" style={{ marginTop: 16 }}>
+            <div>
+              <label style={{ display: "block", fontSize: 15, fontWeight: 600, color: "var(--profile-heading)", marginBottom: 6 }}>Preferred Language</label>
+              <select className="profile-select" value={form.language} onChange={e => setForm(f => ({ ...f, language: e.target.value }))}>
+                <option>English</option><option>Hindi</option><option>Marathi</option><option>Telugu</option><option>Tamil</option>
+              </select>
+            </div>
+            <div>
+              <label style={{ display: "block", fontSize: 15, fontWeight: 600, color: "var(--profile-heading)", marginBottom: 6 }}>Currency</label>
+              <select className="profile-select" value={form.currency} onChange={e => setForm(f => ({ ...f, currency: e.target.value }))}>
+                <option>INR (₹)</option><option>USD ($)</option>
+              </select>
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 16, marginTop: 24, justifyContent: "flex-end", flexWrap: "wrap" }}>
+            <button type="button" style={{ background: "none", border: "none", color: "var(--profile-meta)", cursor: "pointer", fontSize: 14, fontFamily: "Outfit" }}>Cancel</button>
+            <button type="submit" className="btn-profile-primary" style={{ minWidth: 140, justifyContent: "center" }} disabled={saving}>
+              {saving ? "Saving…" : "Save Changes"}
+            </button>
+          </div>
+        </div>
+      </form>
+    </section>
+  );
+}
+/* ─────────────────────────────────────────────
+   SECTION: ADDRESSES
+───────────────────────────────────────────── */
+function AddressesSection({ onToast }: { onToast: (msg: string, t?: ToastType["type"]) => void }) {
+  const [addresses, setAddresses] = useState(ADDRESSES);
+  const [showModal, setShowModal] = useState(false);
+  const [editAddr, setEditAddr] = useState<typeof ADDRESSES[0] | null>(null);
+  const [form, setForm] = useState({ type: "Home", name: "", phone: "", pin: "", city: "", line1: "", line2: "", state: "", country: "India", isDefault: false });
+  const openAdd = () => { setEditAddr(null); setForm({ type: "Home", name: "", phone: "", pin: "", city: "", line1: "", line2: "", state: "", country: "India", isDefault: false }); setShowModal(true); };
+  const openEdit = (addr: typeof ADDRESSES[0]) => { setEditAddr(addr); setForm({ type: addr.type, name: addr.name, phone: addr.phone, pin: addr.pin, city: addr.city, line1: addr.line1, line2: addr.line2, state: addr.state, country: addr.country, isDefault: addr.isDefault }); setShowModal(true); };
+  const handleSave = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (editAddr) {
+      setAddresses(prev => prev.map(a => a.id === editAddr.id ? { ...a, ...form } : a));
+      onToast("Address updated!", "success");
+    } else {
+      setAddresses(prev => [...prev, { id: Date.now(), ...form, icon: form.type === "Home" ? "🏠" : "🏢" }]);
+      onToast("Address saved!", "success");
+    }
+    setShowModal(false);
+  };
+  const deleteAddr = (id: number) => { setAddresses(prev => prev.filter(a => a.id !== id)); onToast("Address removed", "success"); };
+  const setDefault = (id: number) => { setAddresses(prev => prev.map(a => ({ ...a, isDefault: a.id === id }))); onToast("Default address updated ✓", "success"); };
+  return (
+    <section aria-label="Saved Addresses" style={{ animation: "slideUp var(--motion-normal) ease" }}>
+      <div className="section-hdr">
+        <h2 className="section-title-lg">Saved Addresses <span className="section-count">({addresses.length})</span></h2>
+        <button className="btn-profile-primary" onClick={openAdd}>+ Add New Address</button>
+      </div>
+      {addresses.length === 0 ? (
+        <div className="empty-state">
+          <div className="empty-state-icon">📍</div>
+          <h3>No addresses saved</h3>
+          <p>Add a delivery address to speed up your checkout.</p>
+          <button className="btn-profile-primary" onClick={openAdd}>+ Add First Address</button>
+        </div>
+      ) : (
+        <div className="address-grid">
+          {addresses.map(addr => (
+            <div key={addr.id} className="profile-card" style={{ borderColor: addr.isDefault ? "var(--color-surface-raised)" : "var(--profile-card-border)", borderWidth: addr.isDefault ? 2 : 1 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10, alignItems: "flex-start" }}>
+                <p style={{ fontSize: 14, fontWeight: 700, color: "var(--profile-heading)" }}>{addr.icon} {addr.type}</p>
+                {addr.isDefault && <span style={{ background: "var(--color-surface-raised)", color: "#fff", fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: "var(--radius-full)" }}>Default</span>}
+              </div>
+              <div style={{ borderTop: "1px solid var(--profile-divider)", paddingTop: 10 }}>
+                <p style={{ fontSize: 14, fontWeight: 600, color: "var(--profile-heading)" }}>{addr.name}</p>
+                <p style={{ fontSize: 14, color: "var(--profile-body)", lineHeight: 1.6 }}>{addr.line1}</p>
+                <p style={{ fontSize: 14, color: "var(--profile-body)", lineHeight: 1.6 }}>{addr.line2}, {addr.city} — {addr.pin}</p>
+                <p style={{ fontSize: 14, color: "var(--profile-body)", lineHeight: 1.6 }}>{addr.state}, {addr.country}</p>
+                <p style={{ fontSize: 14, color: "var(--profile-meta)", marginTop: 6 }}>📞 {addr.phone}</p>
+              </div>
+              <div style={{ display: "flex", gap: 10, marginTop: 14, flexWrap: "wrap", alignItems: "center" }}>
+                <button className="btn-profile-outline" style={{ height: 34, fontSize: 13 }} onClick={() => openEdit(addr)}>Edit</button>
+                <button style={{ background: "none", border: "none", color: "var(--profile-danger-text)", fontSize: 13, cursor: "pointer", fontFamily: "Outfit" }} onClick={() => deleteAddr(addr.id)}>Delete</button>
+                {!addr.isDefault && <button style={{ background: "none", border: "none", color: "var(--color-surface-raised)", fontSize: 13, cursor: "pointer", fontFamily: "Outfit", fontWeight: 600 }} onClick={() => setDefault(addr.id)}>Set as Default</button>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {/* Add/Edit Modal */}
+      {showModal && (
+        <Modal title={editAddr ? "Edit Address" : "Add New Address"} onClose={() => setShowModal(false)} maxWidth={560}
+          footer={<><button type="button" className="btn-profile-outline" onClick={() => setShowModal(false)} style={{ flex: 1, justifyContent: "center" }}>Cancel</button><button type="submit" form="addr-form" className="btn-profile-primary" style={{ flex: 1, justifyContent: "center" }}>Save Address</button></>}>
+          <form id="addr-form" onSubmit={handleSave}>
+            {/* Address type */}
+            <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
+              {["Home", "Work", "Other"].map(t => (
+                <button key={t} type="button" onClick={() => setForm(f => ({ ...f, type: t }))}
+                  style={{ flex: 1, height: 40, borderRadius: "var(--radius-sm)", border: `1px solid ${form.type === t ? "var(--color-surface-raised)" : "var(--profile-input-border)"}`, background: form.type === t ? "var(--profile-sidebar-active-bg)" : "transparent", color: form.type === t ? "var(--color-surface-raised)" : "var(--profile-body)", fontWeight: form.type === t ? 700 : 500, cursor: "pointer", fontFamily: "Outfit", fontSize: 14 }}>
+                  {t === "Home" ? "🏠" : t === "Work" ? "🏢" : "☆"} {t}
+                </button>
+              ))}
+            </div>
+            <div className="form-grid-2">
+              <div>
+                <label style={{ display: "block", fontSize: 15, fontWeight: 600, color: "var(--profile-heading)", marginBottom: 6 }}>Full Name *</label>
+                <input className="profile-input" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required />
+              </div>
+              <div>
+                <label style={{ display: "block", fontSize: 15, fontWeight: 600, color: "var(--profile-heading)", marginBottom: 6 }}>Phone Number *</label>
+                <input className="profile-input" type="tel" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} required />
+              </div>
+              <div>
+                <label style={{ display: "block", fontSize: 15, fontWeight: 600, color: "var(--profile-heading)", marginBottom: 6 }}>Pincode *</label>
+                <input className="profile-input" value={form.pin} onChange={e => setForm(f => ({ ...f, pin: e.target.value }))} required maxLength={6} placeholder="6-digit pincode" />
+              </div>
+              <div>
+                <label style={{ display: "block", fontSize: 15, fontWeight: 600, color: "var(--profile-heading)", marginBottom: 6 }}>City *</label>
+                <input className="profile-input" value={form.city} onChange={e => setForm(f => ({ ...f, city: e.target.value }))} required />
+              </div>
+            </div>
+            <div style={{ marginTop: 16 }}>
+              <label style={{ display: "block", fontSize: 15, fontWeight: 600, color: "var(--profile-heading)", marginBottom: 6 }}>Address Line 1 *</label>
+              <input className="profile-input" value={form.line1} onChange={e => setForm(f => ({ ...f, line1: e.target.value }))} required />
+            </div>
+            <div style={{ marginTop: 16 }}>
+              <label style={{ display: "block", fontSize: 15, fontWeight: 600, color: "var(--profile-heading)", marginBottom: 6 }}>Address Line 2</label>
+              <input className="profile-input" value={form.line2} onChange={e => setForm(f => ({ ...f, line2: e.target.value }))} />
+            </div>
+            <div className="form-grid-2" style={{ marginTop: 16 }}>
+              <div>
+                <label style={{ display: "block", fontSize: 15, fontWeight: 600, color: "var(--profile-heading)", marginBottom: 6 }}>State *</label>
+                <select className="profile-select" value={form.state} onChange={e => setForm(f => ({ ...f, state: e.target.value }))} required>
+                  <option value="">Select state</option>
+                  <option>Maharashtra</option><option>Karnataka</option><option>Tamil Nadu</option><option>Delhi</option><option>Gujarat</option>
+                </select>
+              </div>
+              <div>
+                <label style={{ display: "block", fontSize: 15, fontWeight: 600, color: "var(--profile-heading)", marginBottom: 6 }}>Country</label>
+                <input className="profile-input" value={form.country} readOnly />
+              </div>
+            </div>
+            <label style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 16, cursor: "pointer", fontSize: 14, color: "var(--profile-body)" }}>
+              <input type="checkbox" checked={form.isDefault} onChange={e => setForm(f => ({ ...f, isDefault: e.target.checked }))} style={{ width: 18, height: 18, accentColor: "var(--color-surface-raised)" }} />
+              Set as default address
+            </label>
+          </form>
+        </Modal>
+      )}
+    </section>
+  );
+}
+/* ─────────────────────────────────────────────
+   SECTION: LOYALTY REWARDS
+───────────────────────────────────────────── */
+function LoyaltySection({ onToast }: { onToast: (msg: string, t?: ToastType["type"]) => void }) {
+  const [showRedeem, setShowRedeem] = useState(false);
+  const [redeemPoints, setRedeemPoints] = useState(100);
+  const maxRedeem = USER.points;
+  const tiers = [
+    { name: "🌿 Plant Lover", range: "0–499 pts", current: true, benefits: ["1 point per ₹10 spent", "Birthday discount"] },
+    { name: "🥈 Silver", range: "500–999 pts", current: false, benefits: ["1.5× points", "Free delivery on ₹399+"] },
+    { name: "🥇 Gold", range: "1000+ pts", current: false, benefits: ["2× points", "Free delivery always", "Early sale access"] },
+  ];
+  return (
+    <section aria-label="Loyalty Rewards" style={{ animation: "slideUp var(--motion-normal) ease" }}>
+      <div className="section-hdr">
+        <h2 className="section-title-lg">Loyalty Rewards</h2>
+      </div>
+      {/* Points summary card */}
+      <div style={{ background: "var(--profile-points-bg)", border: "1px solid var(--color-surface-raised)", borderRadius: "var(--radius-xl)", padding: 24, marginBottom: 24 }}>
+        <p style={{ fontSize: 13, color: "var(--profile-meta)", marginBottom: 12 }}>🏅 Green Points</p>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 16, marginBottom: 16, flexWrap: "wrap" }}>
+          <div>
+            <span style={{ fontSize: 36, fontWeight: 800, color: "var(--color-surface-raised)" }}>{USER.points}</span>
+            <span style={{ fontSize: 14, color: "var(--profile-meta)", marginLeft: 6 }}>points</span>
+          </div>
+          <p style={{ fontSize: 13, color: "var(--profile-meta)" }}>Next: Silver at 500 pts</p>
+        </div>
+        <div className="loyalty-progress-track" style={{ marginBottom: 8 }}>
+          <div className="loyalty-progress-fill" style={{ width: `${(USER.points / 500) * 100}%` }} role="progressbar" aria-label={`${USER.points} of 500 points to Silver tier`} aria-valuenow={USER.points} aria-valuemin={0} aria-valuemax={500} />
+        </div>
+        <p style={{ fontSize: 12, fontWeight: 600, color: "var(--color-surface-raised)", textAlign: "right", marginBottom: 16 }}>{USER.points} / 500</p>
+        {/* Tier journey */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 13, fontWeight: 700, color: "var(--color-surface-raised)" }}>🌿 Plant Lover</span>
+          <span style={{ color: "var(--profile-meta)", fontSize: 12 }}>——→</span>
+          <span style={{ fontSize: 13, color: "var(--profile-meta)" }}>🥈 Silver</span>
+          <span style={{ color: "var(--profile-meta)", fontSize: 12 }}>——→</span>
+          <span style={{ fontSize: 13, color: "var(--profile-meta)" }}>🥇 Gold</span>
+        </div>
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+          <button className="btn-profile-primary" style={{ flex: 1, justifyContent: "center" }} onClick={() => setShowRedeem(true)}>Redeem Points</button>
+          <button className="btn-profile-outline" style={{ flex: 1, justifyContent: "center" }}>Points History</button>
+        </div>
+      </div>
+      {/* Tier benefits table */}
+      <div className="profile-card" style={{ marginBottom: 24 }}>
+        <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--profile-heading)", marginBottom: 16 }}>Tier Benefits</h3>
+        <div style={{ borderRadius: "var(--radius-md)", overflow: "hidden", border: "1px solid var(--profile-divider)" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse" }} role="table">
+            <thead>
+              <tr style={{ background: "rgba(0,181,102,0.08)" }}>
+                <th style={{ padding: "10px 14px", fontSize: 12, fontWeight: 700, color: "var(--profile-heading)", textAlign: "left", borderBottom: "1px solid var(--profile-divider)" }}>Tier</th>
+                <th style={{ padding: "10px 14px", fontSize: 12, fontWeight: 700, color: "var(--profile-heading)", textAlign: "left", borderBottom: "1px solid var(--profile-divider)" }}>Points</th>
+                <th style={{ padding: "10px 14px", fontSize: 12, fontWeight: 700, color: "var(--profile-heading)", textAlign: "left", borderBottom: "1px solid var(--profile-divider)" }}>Benefits</th>
+              </tr>
+            </thead>
+            <tbody>
+              {tiers.map((tier, i) => (
+                <tr key={i} aria-selected={tier.current}
+                  style={{ background: tier.current ? "rgba(0,181,102,0.06)" : "transparent", borderLeft: tier.current ? "3px solid var(--color-surface-raised)" : "3px solid transparent" }}>
+                  <td style={{ padding: "12px 14px", fontSize: 14, fontWeight: tier.current ? 700 : 400, color: tier.current ? "var(--color-surface-raised)" : "var(--profile-heading)", borderBottom: i < tiers.length - 1 ? "1px solid var(--profile-divider)" : "none" }}>{tier.name}</td>
+                  <td style={{ padding: "12px 14px", fontSize: 14, color: "var(--profile-meta)", borderBottom: i < tiers.length - 1 ? "1px solid var(--profile-divider)" : "none" }}>{tier.range}</td>
+                  <td style={{ padding: "12px 14px", fontSize: 14, color: "var(--profile-body)", borderBottom: i < tiers.length - 1 ? "1px solid var(--profile-divider)" : "none" }}>{tier.benefits.join(" · ")}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      {/* Points history */}
+      <div className="profile-card">
+        <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--profile-heading)", marginBottom: 16 }}>Points History</h3>
+        <div style={{ borderRadius: "var(--radius-md)", overflow: "hidden", border: "1px solid var(--profile-divider)" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead>
+              <tr style={{ background: "rgba(0,181,102,0.08)" }}>
+                <th style={{ padding: "10px 14px", fontSize: 12, fontWeight: 700, color: "var(--profile-heading)", textAlign: "left", borderBottom: "1px solid var(--profile-divider)" }}>Date</th>
+                <th style={{ padding: "10px 14px", fontSize: 12, fontWeight: 700, color: "var(--profile-heading)", textAlign: "left", borderBottom: "1px solid var(--profile-divider)" }}>Description</th>
+                <th style={{ padding: "10px 14px", fontSize: 12, fontWeight: 700, color: "var(--profile-heading)", textAlign: "right", borderBottom: "1px solid var(--profile-divider)" }}>Points</th>
+              </tr>
+            </thead>
+            <tbody>
+              {POINTS_HISTORY.map((h, i) => (
+                <tr key={i} style={{ background: i % 2 === 0 ? "transparent" : "rgba(28,28,28,0.02)" }}>
+                  <td style={{ padding: "10px 14px", fontSize: 14, color: "var(--profile-meta)", borderBottom: i < POINTS_HISTORY.length - 1 ? "1px solid var(--profile-divider)" : "none" }}>{h.date}</td>
+                  <td style={{ padding: "10px 14px", fontSize: 14, color: "var(--profile-body)", borderBottom: i < POINTS_HISTORY.length - 1 ? "1px solid var(--profile-divider)" : "none" }}>{h.desc}</td>
+                  <td style={{ padding: "10px 14px", fontSize: 14, fontWeight: 600, color: h.positive ? "var(--profile-status-delivered)" : "var(--profile-status-cancelled)", textAlign: "right", borderBottom: i < POINTS_HISTORY.length - 1 ? "1px solid var(--profile-divider)" : "none" }}>
+                    {h.positive ? "+" : ""}{h.points} pts
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <button style={{ display: "block", width: "100%", marginTop: 14, background: "none", border: "none", color: "var(--color-surface-raised)", fontWeight: 600, fontSize: 13, cursor: "pointer", fontFamily: "Outfit", textAlign: "center" }}>Load more history</button>
+      </div>
+      {/* Redeem Modal */}
+      {showRedeem && (
+        <Modal title="Redeem Green Points" onClose={() => setShowRedeem(false)} maxWidth={440}
+          footer={<button className="btn-profile-primary" style={{ flex: 1, justifyContent: "center" }} onClick={() => { setShowRedeem(false); onToast(`${redeemPoints} points redeemed! Code: GREEN-${Math.floor(redeemPoints * 0.1)}`, "success"); }}>Apply to Next Order</button>}>
+          <p style={{ fontSize: 14, color: "var(--profile-meta)", marginBottom: 20 }}>Available: <strong style={{ color: "var(--profile-heading)" }}>{USER.points} pts = ₹{Math.floor(USER.points * 0.1)} off</strong></p>
+          <label style={{ display: "block", fontSize: 15, fontWeight: 600, color: "var(--profile-heading)", marginBottom: 10 }}>Points to redeem:</label>
+          <input type="range" min={100} max={maxRedeem} step={10} value={redeemPoints} onChange={e => setRedeemPoints(Number(e.target.value))}
+            style={{ width: "100%", accentColor: "var(--color-surface-raised)", marginBottom: 8 }} aria-label="Points to redeem" />
+          <div style={{ display: "flex", justifyContent: "space-between" }}>
+            <span style={{ fontSize: 14, fontWeight: 700, color: "var(--color-surface-raised)" }}>{redeemPoints} pts</span>
+            <span style={{ fontSize: 14, color: "var(--profile-meta)" }}>= ₹{Math.floor(redeemPoints * 0.1)} off</span>
+          </div>
+          <p style={{ fontSize: 13, color: "var(--profile-meta)", marginTop: 12 }}>Value: ₹{Math.floor(redeemPoints * 0.1)} off your next order</p>
+        </Modal>
+      )}
+    </section>
+  );
+}
+/* ─────────────────────────────────────────────
+   SECTION: PAYMENT METHODS
+───────────────────────────────────────────── */
+function PaymentSection({ onToast }: { onToast: (msg: string, t?: ToastType["type"]) => void }) {
+  const [showAdd, setShowAdd] = useState(false);
+  const [cards] = useState([
+    { id: 1, network: "Visa", last4: "4821", expiry: "09/28", isDefault: true },
+    { id: 2, network: "Mastercard", last4: "1234", expiry: "12/25", isDefault: false },
+  ]);
+  return (
+    <section aria-label="Payment Methods" style={{ animation: "slideUp var(--motion-normal) ease" }}>
+      <div className="section-hdr">
+        <h2 className="section-title-lg">Payment Methods</h2>
+        <button className="btn-profile-primary" onClick={() => setShowAdd(true)}>+ Add Card</button>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        {cards.map(card => (
+          <div key={card.id} className="profile-card" style={{ borderColor: card.isDefault ? "var(--color-surface-raised)" : "var(--profile-card-border)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <div style={{ width: 48, height: 30, background: "rgba(0,181,102,0.08)", borderRadius: "var(--radius-xs)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, color: "var(--profile-heading)", border: "1px solid var(--profile-divider)" }}>
+                  {card.network === "Visa" ? "VISA" : "MC"}
+                </div>
+                <div>
+                  <p style={{ fontSize: 14, fontWeight: 500, color: "var(--profile-heading)" }}>•••• •••• •••• {card.last4}</p>
+                  <p style={{ fontSize: 12, color: "var(--profile-meta)" }}>Expires: {card.expiry}</p>
+                </div>
+              </div>
+              {card.isDefault && <span style={{ background: "var(--color-surface-raised)", color: "#fff", fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: "var(--radius-full)" }}>Default</span>}
+            </div>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button style={{ background: "none", border: "none", color: "var(--profile-danger-text)", fontSize: 13, cursor: "pointer", fontFamily: "Outfit" }} onClick={() => onToast("Card removed", "info")}>Remove</button>
+              {!card.isDefault && <button style={{ background: "none", border: "none", color: "var(--color-surface-raised)", fontSize: 13, cursor: "pointer", fontFamily: "Outfit", fontWeight: 600 }} onClick={() => onToast("Default card updated ✓", "success")}>Set as Default</button>}
+            </div>
+          </div>
+        ))}
+      </div>
+      {showAdd && (
+        <Modal title="Add New Card" onClose={() => setShowAdd(false)} maxWidth={480}
+          footer={<><button type="button" className="btn-profile-outline" onClick={() => setShowAdd(false)} style={{ flex: 1, justifyContent: "center" }}>Cancel</button><button type="button" className="btn-profile-primary" style={{ flex: 1, justifyContent: "center" }} onClick={() => { setShowAdd(false); onToast("Card added securely!", "success"); }}>Save Card</button></>}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <div>
+              <label style={{ display: "block", fontSize: 15, fontWeight: 600, color: "var(--profile-heading)", marginBottom: 6 }}>Card Number</label>
+              <input className="profile-input" placeholder="1234 5678 9012 3456" maxLength={19} />
+            </div>
+            <div>
+              <label style={{ display: "block", fontSize: 15, fontWeight: 600, color: "var(--profile-heading)", marginBottom: 6 }}>Name on Card</label>
+              <input className="profile-input" placeholder="PRIYA KUMAR" />
+            </div>
+            <div className="form-grid-2">
+              <div>
+                <label style={{ display: "block", fontSize: 15, fontWeight: 600, color: "var(--profile-heading)", marginBottom: 6 }}>Expiry (MM/YY)</label>
+                <input className="profile-input" placeholder="09/28" maxLength={5} />
+              </div>
+              <div>
+                <label style={{ display: "block", fontSize: 15, fontWeight: 600, color: "var(--profile-heading)", marginBottom: 6 }}>CVV</label>
+                <input className="profile-input" type="password" placeholder="•••" maxLength={4} />
+              </div>
+            </div>
+            <div style={{ background: "rgba(0,181,102,0.06)", borderRadius: "var(--radius-sm)", padding: "10px 14px", display: "flex", gap: 8, alignItems: "center" }}>
+              <span style={{ color: "var(--color-surface-raised)", fontSize: 14 }}>🔒</span>
+              <p style={{ fontSize: 12, color: "var(--profile-meta)" }}>Your card details are encrypted and stored securely. We never store your CVV.</p>
+            </div>
+          </div>
+        </Modal>
+      )}
+    </section>
+  );
+}
+/* ─────────────────────────────────────────────
+   SECTION: REVIEWS
+───────────────────────────────────────────── */
+function ReviewsSection({ onToast }: { onToast: (msg: string, t?: ToastType["type"]) => void }) {
+  const [tab, setTab] = useState<"written" | "pending">("written");
+  const [showModal, setShowModal] = useState(false);
+  const [reviewProduct, setReviewProduct] = useState("");
+  const [rating, setRating] = useState(0);
+  const [reviewText, setReviewText] = useState("");
+  return (
+    <section aria-label="My Reviews" style={{ animation: "slideUp var(--motion-normal) ease" }}>
+      <div className="section-hdr">
+        <h2 className="section-title-lg">My Reviews <span className="section-count">({REVIEWS_WRITTEN.length + REVIEWS_PENDING.length})</span></h2>
+      </div>
+      {/* Tabs */}
+      <div className="filter-tabs" role="tablist" style={{ marginBottom: 20 }}>
+        <button className={`filter-tab ${tab === "written" ? "active" : ""}`} role="tab" aria-selected={tab === "written"} onClick={() => setTab("written")}>Written ({REVIEWS_WRITTEN.length})</button>
+        <button className={`filter-tab ${tab === "pending" ? "active" : ""}`} role="tab" aria-selected={tab === "pending"} onClick={() => setTab("pending")}>Pending ({REVIEWS_PENDING.length})</button>
+      </div>
+      {tab === "written" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          {REVIEWS_WRITTEN.map(review => (
+            <div key={review.id} className="profile-card">
+              <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
+                <div style={{ width: 56, height: 56, borderRadius: "var(--radius-sm)", background: "rgba(0,181,102,0.06)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, flexShrink: 0, border: "1px solid var(--profile-divider)" }}>{review.img}</div>
+                <div style={{ flex: 1 }}>
+                  <p style={{ fontSize: 15, fontWeight: 600, color: "var(--profile-heading)", marginBottom: 6 }}>{review.product}</p>
+                  <StarRating value={review.rating} size={18} />
+                  <p style={{ fontSize: 9, color: "var(--profile-meta)", marginTop: 4 }}>Ordered: {review.ordered}</p>
+                </div>
+              </div>
+              <p style={{ fontSize: 14, color: "var(--profile-body)", lineHeight: 1.6, marginTop: 12, fontStyle: "italic" }}>&ldquo;{review.text}&rdquo;</p>
+              <div style={{ display: "flex", gap: 10, marginTop: 14 }}>
+                <button className="btn-profile-outline" style={{ height: 34, fontSize: 13 }} onClick={() => { setReviewProduct(review.product); setRating(review.rating); setReviewText(review.text); setShowModal(true); }}>Edit Review</button>
+                <button style={{ background: "none", border: "none", color: "var(--profile-danger-text)", fontSize: 13, cursor: "pointer", fontFamily: "Outfit" }} onClick={() => onToast("Review deleted", "info")}>Delete Review</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {tab === "pending" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          {REVIEWS_PENDING.map(p => (
+            <div key={p.id} className="profile-card">
+              <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
+                <div style={{ width: 56, height: 56, borderRadius: "var(--radius-sm)", background: "rgba(0,181,102,0.06)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, border: "1px solid var(--profile-divider)" }}>{p.img}</div>
+                <div style={{ flex: 1 }}>
+                  <p style={{ fontSize: 15, fontWeight: 600, color: "var(--profile-heading)", marginBottom: 4 }}>{p.product}</p>
+                  <p style={{ fontSize: 9, color: "var(--profile-meta)" }}>Ordered: {p.ordered}</p>
+                  <p style={{ fontSize: 13, color: "var(--profile-meta)", marginTop: 8 }}>How was this plant?</p>
+                  <StarRating value={0} onChange={setRating} size={24} />
+                </div>
+              </div>
+              <button className="btn-profile-primary" style={{ marginTop: 14, height: 38, fontSize: 14 }} onClick={() => { setReviewProduct(p.product); setRating(0); setReviewText(""); setShowModal(true); }}>Write a Review</button>
+            </div>
+          ))}
+        </div>
+      )}
+      {/* Review Modal */}
+      {showModal && (
+        <Modal title={`Review: ${reviewProduct}`} onClose={() => setShowModal(false)} maxWidth={560}
+          footer={<><button type="button" className="btn-profile-outline" onClick={() => setShowModal(false)} style={{ flex: 1, justifyContent: "center" }}>Cancel</button><button type="button" className="btn-profile-primary" style={{ flex: 1, justifyContent: "center" }} onClick={() => { setShowModal(false); onToast("Review submitted! Thank you ⭐", "success"); }}>Submit Review</button></>}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <div>
+              <label style={{ display: "block", fontSize: 15, fontWeight: 600, color: "var(--profile-heading)", marginBottom: 8 }}>Rating *</label>
+              <StarRating value={rating} onChange={setRating} size={32} />
+            </div>
+            <div>
+              <label style={{ display: "block", fontSize: 15, fontWeight: 600, color: "var(--profile-heading)", marginBottom: 6 }}>Review Title</label>
+              <input className="profile-input" placeholder="Great plant!" />
+            </div>
+            <div>
+              <label style={{ display: "block", fontSize: 15, fontWeight: 600, color: "var(--profile-heading)", marginBottom: 6 }}>Your Review *</label>
+              <textarea className="profile-textarea" value={reviewText} onChange={e => setReviewText(e.target.value)} placeholder="Arrived in perfect condition..." minLength={50} maxLength={2000} style={{ minHeight: 120 }} />
+              <p style={{ fontSize: 9, textAlign: "right", color: reviewText.length >= 1600 ? "var(--profile-status-processing)" : "var(--profile-meta)", marginTop: 4 }}>50–2000 characters · {reviewText.length} / 2000</p>
+            </div>
+            <div>
+              <label style={{ display: "block", fontSize: 15, fontWeight: 600, color: "var(--profile-heading)", marginBottom: 6 }}>Add Photos (optional)</label>
+              <button type="button" className="btn-profile-outline" style={{ fontSize: 13 }}>📷 Add up to 3 photos</button>
+            </div>
+          </div>
+        </Modal>
+      )}
+    </section>
+  );
+}
+/* ─────────────────────────────────────────────
+   SECTION: NOTIFICATIONS
+───────────────────────────────────────────── */
+function NotificationsSection({ onToast }: { onToast: (msg: string, t?: ToastType["type"]) => void }) {
+  const [notifications, setNotifications] = useState(NOTIFICATIONS);
+  const [prefs, setPrefs] = useState({
+    orderUpdates: { email: true, push: true, sms: false },
+    watering: { email: false, push: true, sms: false },
+    priceDrops: { email: true, push: false, sms: false },
+    offers: { email: true, push: false, sms: false },
+    loyalty: { email: true, push: true, sms: false },
+  });
+  const markAllRead = () => { setNotifications(prev => prev.map(n => ({ ...n, read: true }))); onToast("All notifications marked as read", "success"); };
+  const markRead = (id: number) => setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+  const togglePref = (category: keyof typeof prefs, channel: "email" | "push" | "sms") => {
+    setPrefs(p => ({ ...p, [category]: { ...p[category], [channel]: !p[category][channel] } }));
+    onToast("Notification preference saved ✓", "success");
+  };
+  const unreadCount = notifications.filter(n => !n.read).length;
+  const prefRows = [
+    { key: "orderUpdates", label: "Order Updates" },
+    { key: "watering", label: "Watering Reminders" },
+    { key: "priceDrops", label: "Wishlist price drops" },
+    { key: "offers", label: "New arrivals & offers" },
+    { key: "loyalty", label: "Loyalty rewards" },
+  ] as const;
+  return (
+    <section aria-label="Notifications" style={{ animation: "slideUp var(--motion-normal) ease" }}>
+      <div className="section-hdr">
+        <h2 className="section-title-lg">Notifications {unreadCount > 0 && <span style={{ fontSize: 14, background: "var(--color-surface-raised)", color: "#fff", padding: "2px 8px", borderRadius: "var(--radius-full)", marginLeft: 8 }}>{unreadCount}</span>}</h2>
+        <button className="btn-profile-outline" style={{ height: 36, fontSize: 13 }} onClick={markAllRead}>Mark All as Read</button>
+      </div>
+      <div className="profile-card" style={{ marginBottom: 24, padding: 0, overflow: "hidden" }}>
+        {notifications.map(n => (
+          <div key={n.id} className={`notif-item ${n.read ? "read" : "unread"}`} onClick={() => markRead(n.id)} aria-label={`${n.title}. ${n.time}. ${n.read ? "Read" : "Unread"}`}>
+            <span style={{ fontSize: 24, flexShrink: 0 }}>{n.icon}</span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={{ fontSize: 14, fontWeight: n.read ? 400 : 600, color: n.read ? "var(--profile-body)" : "var(--profile-heading)", marginBottom: 2 }}>{n.title}</p>
+              <p style={{ fontSize: 13, color: "var(--profile-meta)" }}>{n.body}</p>
+            </div>
+            <span style={{ fontSize: 9, color: "var(--profile-meta)", whiteSpace: "nowrap", flexShrink: 0 }}>{n.time}</span>
+          </div>
+        ))}
+      </div>
+      {/* Notification preferences */}
+      <div className="profile-card">
+        <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--profile-heading)", marginBottom: 16 }}>Notification Preferences</h3>
+        <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+          {/* Header row */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 80px 80px 80px", gap: 8, paddingBottom: 10, borderBottom: "1px solid var(--profile-divider)", marginBottom: 4 }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: "var(--profile-meta)" }}></span>
+            {["Email", "Push", "SMS"].map(ch => <span key={ch} style={{ fontSize: 12, fontWeight: 700, color: "var(--profile-meta)", textAlign: "center" }}>{ch}</span>)}
+          </div>
+          {prefRows.map(row => (
+            <div key={row.key} style={{ display: "grid", gridTemplateColumns: "1fr 80px 80px 80px", gap: 8, alignItems: "center", padding: "12px 0", borderBottom: "1px solid var(--profile-divider)" }}>
+              <span style={{ fontSize: 14, color: "var(--profile-body)" }}>{row.label}</span>
+              {(["email", "push", "sms"] as const).map(ch => (
+                <div key={ch} style={{ display: "flex", justifyContent: "center" }}>
+                  <ToggleSwitch checked={prefs[row.key][ch]} onChange={() => togglePref(row.key, ch)} label={`${row.label} ${ch} notifications`} />
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+/* ─────────────────────────────────────────────
+   SECTION: SECURITY
+───────────────────────────────────────────── */
+function SecuritySection({ onToast }: { onToast: (msg: string, t?: ToastType["type"]) => void }) {
+  const [showChangePwd, setShowChangePwd] = useState(false);
+  const [show2FA, setShow2FA] = useState(false);
+  const [twoFA, setTwoFA] = useState(false);
+  const [pwd, setPwd] = useState({ current: "", newPwd: "", confirm: "" });
+  const [showPwd, setShowPwd] = useState({ current: false, newPwd: false, confirm: false });
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteInput, setDeleteInput] = useState("");
+  const getStrength = (p: string): number => {
+    let s = 0;
+    if (p.length >= 8) s++;
+    if (/[A-Z]/.test(p)) s++;
+    if (/[0-9]/.test(p)) s++;
+    if (/[^A-Za-z0-9]/.test(p)) s++;
+    return s;
+  };
+  const strengthInfo = [
+    { color: "var(--profile-status-cancelled)", label: "Weak" },
+    { color: "var(--profile-status-processing)", label: "Fair" },
+    { color: "#2563eb", label: "Good" },
+    { color: "var(--profile-status-delivered)", label: "Strong" },
+  ];
+  const strength = getStrength(pwd.newPwd);
+  const securityItems = [
+    {
+      icon: "🔑", title: "Password", desc: "Last changed: 45 days ago",
+      action: <button className="btn-profile-outline" style={{ height: 36, fontSize: 13 }} onClick={() => setShowChangePwd(true)}>Change Password</button>
+    },
+    {
+      icon: "📱", title: "Two-Factor Authentication", desc: "Add extra security to your account",
+      action: <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <span style={{ fontSize: 13, color: "var(--profile-meta)" }}>{twoFA ? "ON" : "OFF"}</span>
+        <ToggleSwitch checked={twoFA} onChange={v => { setTwoFA(v); setShow2FA(v); onToast(v ? "2FA enabled!" : "2FA disabled", v ? "success" : "info"); }} label="Two-factor authentication" />
+      </div>
+    },
+  ];
+  const sessions = [
+    { device: "Chrome", location: "Mumbai, MH", time: "2 mins ago", current: true },
+    { device: "Safari", location: "Pune, MH", time: "3 days ago", current: false },
+  ];
+  return (
+    <section aria-label="Security" style={{ animation: "slideUp var(--motion-normal) ease" }}>
+      <div className="section-hdr">
+        <h2 className="section-title-lg">Security</h2>
+      </div>
+      {/* Security items */}
+      <div className="profile-card" style={{ marginBottom: 16, padding: 0, overflow: "hidden" }}>
+        {securityItems.map((item, i) => (
+          <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 20px", borderBottom: i < securityItems.length - 1 ? "1px solid var(--profile-divider)" : "none", gap: 12, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
+              <span style={{ fontSize: 24 }}>{item.icon}</span>
+              <div>
+                <p style={{ fontSize: 15, fontWeight: 600, color: "var(--profile-heading)" }}>{item.title}</p>
+                <p style={{ fontSize: 13, color: "var(--profile-meta)" }}>{item.desc}</p>
+              </div>
+            </div>
+            {item.action}
+          </div>
+        ))}
+      </div>
+      {/* Active sessions */}
+      <div className="profile-card" style={{ marginBottom: 16 }}>
+        <h3 style={{ fontSize: 15, fontWeight: 700, color: "var(--profile-heading)", marginBottom: 14 }}>💻 Active Sessions</h3>
+        {sessions.map((session, i) => (
+          <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: i < sessions.length - 1 ? "1px solid var(--profile-divider)" : "none" }}>
+            <div>
+              <p style={{ fontSize: 14, color: "var(--profile-heading)", fontWeight: 500 }}>{session.device} · {session.location}</p>
+              <p style={{ fontSize: 12, color: "var(--profile-meta)" }}>{session.time} {session.current ? "· Current" : ""}</p>
+            </div>
+            {!session.current && <button style={{ background: "none", border: "none", color: "var(--profile-danger-text)", fontSize: 13, cursor: "pointer", fontFamily: "Outfit" }} onClick={() => onToast("Session signed out", "info")}>Sign Out</button>}
+          </div>
+        ))}
+      </div>
+      {/* Delete account */}
+      <div className="profile-card">
+        <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
+          <span style={{ fontSize: 24 }}>🗑</span>
+          <div style={{ flex: 1 }}>
+            <h3 style={{ fontSize: 15, fontWeight: 700, color: "var(--profile-heading)", marginBottom: 4 }}>Delete Account</h3>
+            <p style={{ fontSize: 13, color: "var(--profile-meta)", marginBottom: 14 }}>Permanently delete your account and all data</p>
+            <button className="btn-profile-danger" style={{ height: 40, fontSize: 14 }} aria-label="Delete your account permanently" onClick={() => setShowDeleteConfirm(true)}>Delete Account</button>
+          </div>
+        </div>
+      </div>
+      {/* Change Password Modal */}
+      {showChangePwd && (
+        <Modal title="Change Password" onClose={() => setShowChangePwd(false)} maxWidth={480}
+          footer={<><button type="button" className="btn-profile-outline" onClick={() => setShowChangePwd(false)} style={{ flex: 1, justifyContent: "center" }}>Cancel</button><button type="button" className="btn-profile-primary" style={{ flex: 1, justifyContent: "center" }} onClick={() => { if (pwd.newPwd !== pwd.confirm) { onToast("Passwords don't match. Try again.", "error"); return; } setShowChangePwd(false); onToast("Password changed successfully!", "success"); }}>Save Password</button></>}>
+          {(["current", "newPwd", "confirm"] as const).map(field => (
+            <div key={field} style={{ marginBottom: 16 }}>
+              <label style={{ display: "block", fontSize: 15, fontWeight: 600, color: "var(--profile-heading)", marginBottom: 6 }}>
+                {field === "current" ? "Current Password" : field === "newPwd" ? "New Password" : "Confirm New Password"}
+              </label>
+              <div style={{ position: "relative" }}>
+                <input className="profile-input" type={showPwd[field] ? "text" : "password"} value={pwd[field]} onChange={e => setPwd(p => ({ ...p, [field]: e.target.value }))} style={{ paddingRight: 48 }} />
+                <button type="button" onClick={() => setShowPwd(p => ({ ...p, [field]: !p[field] }))} aria-label={`${showPwd[field] ? "Hide" : "Show"} password`} aria-pressed={showPwd[field]}
+                  style={{ position: "absolute", right: 14, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", fontSize: 16, color: "var(--profile-meta)" }}>
+                  {showPwd[field] ? "🙈" : "👁"}
+                </button>
+              </div>
+              {field === "newPwd" && pwd.newPwd && (
+                <div>
+                  <div className="pwd-strength-bar">
+                    {[0, 1, 2, 3].map(i => (
+                      <div key={i} className="pwd-seg" style={{ background: i < strength ? strengthInfo[strength - 1].color : "var(--profile-divider)" }} />
+                    ))}
+                  </div>
+                  <p role="status" aria-live="polite" style={{ fontSize: 12, color: strengthInfo[Math.max(0, strength - 1)].color, marginTop: 4 }}>{strength > 0 ? strengthInfo[strength - 1].label : ""}</p>
+                </div>
+              )}
+            </div>
+          ))}
+        </Modal>
+      )}
+      {/* Delete Account Modal */}
+      {showDeleteConfirm && (
+        <Modal title="Delete Account" onClose={() => setShowDeleteConfirm(false)} maxWidth={480}>
+          <div style={{ textAlign: "center", padding: "8px 0 24px" }}>
+            <div style={{ fontSize: 48, marginBottom: 16 }}>⚠️</div>
+            <p style={{ fontSize: 15, fontWeight: 600, color: "var(--profile-heading)", marginBottom: 8 }}>This action is permanent and cannot be undone</p>
+            <p style={{ fontSize: 13, color: "var(--profile-meta)", marginBottom: 24 }}>All your orders, plants, reviews, and data will be deleted.</p>
+            <div style={{ textAlign: "left", marginBottom: 20 }}>
+              <label style={{ display: "block", fontSize: 15, fontWeight: 600, color: "var(--profile-heading)", marginBottom: 6 }}>Type DELETE to confirm</label>
+              <input className="profile-input" value={deleteInput} onChange={e => setDeleteInput(e.target.value)} placeholder='Type "DELETE"' />
+            </div>
+            <div style={{ display: "flex", gap: 12 }}>
+              <button className="btn-profile-outline" style={{ flex: 1, justifyContent: "center" }} onClick={() => setShowDeleteConfirm(false)}>Cancel</button>
+              <button
+                disabled={deleteInput !== "DELETE"}
+                onClick={() => { if (deleteInput === "DELETE") { setShowDeleteConfirm(false); onToast("Account deletion requested", "info"); } }}
+                style={{ flex: 1, justifyContent: "center", opacity: deleteInput !== "DELETE" ? 0.4 : 1, cursor: deleteInput !== "DELETE" ? "not-allowed" : "pointer", background: "transparent", color: "var(--profile-danger-text)", border: "1px solid var(--profile-danger-border)", borderRadius: "var(--radius-full)", height: 44, fontWeight: 600, fontSize: 15, fontFamily: "Outfit", display: "inline-flex", alignItems: "center" }}>
+                Delete My Account
               </button>
             </div>
           </div>
-
-          {/* ────────────────────────────────────────────────────────
-             PROFILE HERO SECTION
-             ──────────────────────────────────────────────────────── */}
-          <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 48px" }} className="main-pad">
-            <section aria-label="Account Overview" className="profile-hero-row" style={{ display: "flex", alignItems: "flex-end", gap: 24, marginTop: -50, marginBottom: 32, position: "relative", zIndex: 2 }}>
-              
-              {/* Avatar circle */}
-              <div style={{ position: "relative", flexShrink: 0 }}>
-                <div style={{ width: 100, height: 100, borderRadius: "50%", background: `linear-gradient(135deg, var(--color-surface-raised) 0%, #009952 100%)`, display: "flex", alignItems: "center", justifyContent: "center", border: `4px solid white`, boxShadow: "0 4px 20px rgba(0,0,0,0.15)" }}>
-                  <span style={{ fontFamily: "'Playfair Display', serif", fontStyle: "italic", fontWeight: 700, fontSize: 34, color: "white", userSelect: "none" }}>
-                    {userName.split(" ").map(w => w[0]).join("").substring(0, 2).toUpperCase()}
-                  </span>
-                </div>
-                <button 
-                  onClick={() => addToast("Avatar upload feature simulated.")}
-                  aria-label="Change profile picture" 
-                  style={{ position: "absolute", bottom: 2, right: 2, width: 28, height: 28, borderRadius: "50%", background: "var(--color-surface-raised)", border: "2px solid white", color: "white", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", boxShadow: "0 2px 8px rgba(0,0,0,0.2)" }}
-                >
-                  <CameraIcon />
-                </button>
-              </div>
-
-              {/* Bio Details */}
-              <div style={{ flex: 1, paddingBottom: 8 }}>
-                {editMode ? (
-                  <form onSubmit={(e) => { e.preventDefault(); setEditMode(false); }} style={{ display: "flex", flexDirection: "column", gap: 8, animation: "slideDown .25s ease" }}>
-                    <input className="edit-input" value={userName} onChange={e => { setUserName(e.target.value); setSettingsName(e.target.value); }} placeholder="Your name" aria-label="Full Name" style={{ fontSize: 18, fontWeight: 600, maxWidth: 320 }} required />
-                    <input className="edit-input" value={userBio} onChange={e => setUserBio(e.target.value)} placeholder="Short bio description" aria-label="Bio description" />
-                    <input className="edit-input" value={userLocation} onChange={e => { setUserLocation(e.target.value); setSettingsLocation(e.target.value); }} placeholder="Location" aria-label="Location" style={{ maxWidth: 220 }} required />
-                  </form>
-                ) : (
-                  <div className="profile-fade" style={{ animationDelay: ".05s" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                      <h1 style={{ fontFamily: "'Playfair Display', serif", fontWeight: 700, fontStyle: "italic", fontSize: 28, color: "var(--color-text-secondary)" }}>{userName}</h1>
-                      <span className="badge" style={{ background: "rgba(0, 181, 102, 0.08)", color: "var(--color-surface-raised)" }}>
-                        🌿 Plant Parent
-                      </span>
-                    </div>
-                    <p style={{ fontSize: 14, color: "var(--color-text-inverse)", marginTop: 4, marginBottom: 6 }}>{userBio}</p>
-                    <p style={{ fontSize: 13, color: "var(--color-text-inverse)", opacity: 0.7, display: "flex", alignItems: "center", gap: 5 }}>
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
-                      </svg>
-                      {userLocation}
-                      <span style={{ color: "rgba(0,0,0,0.12)" }} aria-hidden="true">•</span>
-                      <span>Member since Jan 2025</span>
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              {/* Header Action CTAs */}
-              <div style={{ display: "flex", gap: 10, paddingBottom: 8, flexShrink: 0, flexWrap: "wrap" }}>
-                {editMode ? (
-                  <>
-                    <button className="green-btn" onClick={() => { saveProfileField(userName, userBio, userLocation); setEditMode(false); addToast("Profile changes successfully updated."); }}>Save Changes</button>
-                    <button className="outline-btn" onClick={() => {
-                      if (typeof window !== "undefined") {
-                        setUserName(localStorage.getItem("profile_name") || "Subhajit Ghosh");
-                        setUserBio(localStorage.getItem("profile_bio") || "Plant parent of 6 🌿 | Nature lover | Always learning to grow");
-                        setUserLocation(localStorage.getItem("profile_location") || "Kolkata, India");
-                      }
-                      setEditMode(false);
-                    }}>Cancel</button>
-                  </>
-                ) : (
-                  <>
-                    <button className="green-btn" onClick={(e) => { triggerRef.current = e.currentTarget; setEditMode(true); }}>
-                      <EditIcon /> Edit Profile
-                    </button>
-                    <button className="outline-btn" onClick={() => {
-                      if (navigator.share) {
-                        navigator.share({ title: "My Hero Garden", text: `Check out ${userName}'s plant collection!`, url: window.location.href });
-                      } else {
-                        navigator.clipboard.writeText(window.location.href);
-                        addToast("Profile link copied to clipboard!");
-                      }
-                    }}>Share Profile</button>
-                  </>
-                )}
-              </div>
-            </section>
-
-            {/* ────────────────────────────────────────────────────────
-               STATS SUMMARY CARDS SECTION
-               ──────────────────────────────────────────────────────── */}
-            <section aria-label="Garden statistics summary" className="stats-row" style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14, marginBottom: 32 }}>
-              {[
-                { label: "Plants Owned", value: myPlants.length, icon: "🌱", sub: "Thriving collection" },
-                { label: "Orders Placed", value: ORDERS.length, icon: "📦", sub: "Last order Jun 12" },
-                { label: "Wishlist Items", value: wishlistItems.length, icon: "❤️", sub: `${wishlistItems.filter(w=>w.saved).length} items saved` },
-                { 
-                  label: "Garden Health", 
-                  value: `${myPlants.length > 0 ? Math.round(myPlants.reduce((acc, p) => acc + p.health, 0) / myPlants.length) : 0}%`, 
-                  icon: "💚", 
-                  sub: "Avg plant health" 
-                },
-              ].map((s, i) => (
-                <div key={i} className="stat-box card-in" style={{ animationDelay: `${i * 0.05}s` }}>
-                  <div style={{ fontSize: 24, marginBottom: 6 }} aria-hidden="true">{s.icon}</div>
-                  <p style={{ fontWeight: 700, fontSize: 24, color: "var(--color-text-secondary)" }}>{s.value}</p>
-                  <h3 style={{ fontWeight: 600, fontSize: 13, color: "var(--color-text-inverse)", opacity: 0.8, marginBottom: 3 }}>{s.label}</h3>
-                  <p style={{ fontSize: 11, color: "var(--color-text-inverse)", opacity: 0.6 }}>{s.sub}</p>
-                </div>
-              ))}
-            </section>
-
-            {/* ────────────────────────────────────────────────────────
-               TAB LISTS NAVIGATION (WAI-ARIA TABLIST PATTERN §5.2)
-               ──────────────────────────────────────────────────────── */}
-            <div 
-              role="tablist" 
-              aria-label="Profile navigation sections" 
-              className="tab-scroll" 
-              style={{ display: "flex", gap: 6, marginBottom: 28, background: "white", padding: 6, borderRadius: "var(--radius-step8)", width: "fit-content", border: `1px solid rgba(0, 0, 0, 0.08)`, boxShadow: "var(--shadow-1)" }}
-            >
-              {[
-                { key: "garden", label: "My Garden", icon: "🌿", count: myPlants.length },
-                { key: "orders", label: "Orders", icon: "📦", count: ORDERS.length },
-                { key: "wishlist", label: "Wishlist", icon: "❤️", count: wishlistItems.filter(w => w.saved).length },
-                { key: "billing", label: "Saved Cards", icon: "💳", count: savedCards.length },
-                { key: "settings", label: "Settings", icon: "⚙️", count: null },
-              ].map((t, idx) => (
-                <button
-                  key={t.key}
-                  id={`tab-${t.key}`}
-                  role="tab"
-                  aria-selected={activeTab === t.key}
-                  aria-controls={`panel-${t.key}`}
-                  tabIndex={activeTab === t.key ? 0 : -1}
-                  ref={el => { tabRefs.current[t.key] = el; }}
-                  onClick={() => setActiveTab(t.key)}
-                  onKeyDown={(e) => handleTabKeyDown(e, idx, t.key)}
-                  className="tab-btn"
-                >
-                  <span aria-hidden="true" style={{ fontSize: 14 }}>{t.icon}</span>
-                  {t.label}
-                  {t.count !== null && (
-                    <span style={{ background: activeTab === t.key ? "rgba(255,255,255,0.25)" : "rgba(0,0,0,0.06)", color: activeTab === t.key ? "white" : "var(--color-text-inverse)", opacity: activeTab === t.key ? 1 : 0.7, borderRadius: 99, padding: "1px 6px", fontSize: 10, fontWeight: 700, marginLeft: 4 }}>
-                      {t.count}
-                    </span>
-                  )}
-                </button>
-              ))}
-            </div>
-
-            {/* ────────────────────────────────────────────────────────
-               TABPANELS SECTION
-               ──────────────────────────────────────────────────────── */}
-
-            {/* PANEL: MY GARDEN */}
-            <div 
-              id="panel-garden" 
-              role="tabpanel" 
-              aria-labelledby="tab-garden" 
-              hidden={activeTab !== "garden"}
-              className="profile-fade"
-              style={{ display: activeTab === "garden" ? "block" : "none" }}
-            >
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-                <h2 style={{ fontWeight: 700, fontSize: 18, color: "var(--color-text-secondary)" }}>
-                  My Garden <span style={{ color: "var(--color-text-inverse)", opacity: 0.6, fontWeight: 400, fontSize: 14 }}>— {myPlants.length} plants</span>
-                </h2>
-                <button 
-                  onClick={(e) => { triggerRef.current = e.currentTarget; setPlantModalOpen(true); }}
-                  className="green-btn" 
-                  style={{ fontSize: 13, padding: "8px 18px" }}
-                >
-                  <PlusIcon /> Add Plant
-                </button>
-              </div>
-
-              {/* Plant Cards Grid */}
-              <div className="plants-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 18, marginBottom: 40 }}>
-                {myPlants.map((p, i) => (
-                  <article key={p.id} className="plant-card card-in" style={{ animationDelay: `${i * 0.05}s` }}>
-                    <div style={{ position: "relative", borderRadius: "var(--radius-md)", overflow: "hidden", background: "var(--color-surface-strong)", height: 140 }}>
-                      <img src={p.img} alt={`Photo of ${p.name} plant`} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                      <span className="badge" style={{ 
-                        position: "absolute", top: 10, left: 10, 
-                        background: p.badge === "Thriving" || p.badge === "Perfect" ? "rgba(0,181,102,0.12)" : p.badge === "Needs Water" ? "#FEF3C7" : "#EFF6FF", 
-                        color: p.badge === "Thriving" || p.badge === "Perfect" ? "var(--color-surface-raised)" : p.badge === "Needs Water" ? "var(--profile-star-fill)" : "var(--color-text-inverse)" 
-                      }}>
-                        {p.badge}
-                      </span>
-                    </div>
-                    <div>
-                      <h3 style={{ fontWeight: 600, fontSize: 14, color: "var(--color-text-secondary)", marginBottom: 2 }}>{p.name}</h3>
-                      <p style={{ fontSize: 12, color: "var(--color-text-inverse)", opacity: 0.7, marginBottom: 10 }}>{p.pot} Pot</p>
-                      
-                      {/* Health Indicator bar */}
-                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                        <span style={{ fontSize: 11, color: "var(--color-text-inverse)", opacity: 0.7, width: 42, flexShrink: 0 }}>Health</span>
-                        <HealthBar value={p.health} />
-                        <span style={{ fontSize: 11, fontWeight: 600, color: p.health >= 90 ? "var(--color-surface-raised)" : p.health >= 75 ? "var(--profile-star-fill)" : "var(--profile-danger-text)", width: 30, textAlign: "right" }}>
-                          {p.health}%
-                        </span>
-                      </div>
-
-                      {/* Details row */}
-                      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                        <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: "var(--color-text-inverse)", opacity: 0.8 }}>
-                          <WaterIcon /> {p.water}
-                        </span>
-                        <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: "var(--color-text-inverse)", opacity: 0.8 }}>
-                          <SunIcon /> {p.light}
-                        </span>
-                      </div>
-                    </div>
-                  </article>
-                ))}
-              </div>
-
-              {/* Activity & Achievements layout block */}
-              <div className="activity-row" style={{ display: "flex", gap: 24, marginBottom: 40 }}>
-                {/* Recent Activities */}
-                <section aria-label="Recent gardening logs" style={{ flex: 1, background: "white", borderRadius: "var(--radius-lg)", padding: 24, border: `1px solid rgba(0, 0, 0, 0.08)` }}>
-                  <h3 style={{ fontWeight: 700, fontSize: 15, color: "var(--color-text-secondary)", marginBottom: 18 }}>Recent Activity</h3>
-                  <div style={{ display: "flex", flexDirection: "column" }}>
-                    {ACTIVITY.map((a, i) => (
-                      <div key={i} style={{ display: "flex", gap: 14, padding: "12px 0", borderBottom: i < ACTIVITY.length - 1 ? `1px solid rgba(0,0,0,0.06)` : "none", alignItems: "flex-start" }}>
-                        <div style={{ width: 32, height: 32, borderRadius: "50%", background: `${a.color}14`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, flexShrink: 0 }}>
-                          {a.icon}
-                        </div>
-                        <div style={{ flex: 1 }}>
-                          <p style={{ fontSize: 13, color: "var(--color-text-inverse)", lineHeight: 1.45 }}>{a.text}</p>
-                          <p style={{ fontSize: 11, color: "var(--color-text-inverse)", opacity: 0.6, marginTop: 2 }}>{a.time}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </section>
-
-                {/* Achievements List */}
-                <section aria-label="My unlocked achievements" style={{ width: 340, flexShrink: 0, background: "white", borderRadius: "var(--radius-lg)", padding: 24, border: `1px solid rgba(0, 0, 0, 0.08)` }}>
-                  <h3 style={{ fontWeight: 700, fontSize: 15, color: "var(--color-text-secondary)", marginBottom: 18 }}>
-                    Achievements <span style={{ fontSize: 12, color: "var(--color-text-inverse)", opacity: 0.6, fontWeight: 400 }}>4/6 unlocked</span>
-                  </h3>
-                  
-                  {/* Progress tracker */}
-                  <div style={{ background: "rgba(0,0,0,0.06)", borderRadius: 99, height: 6, marginBottom: 18, overflow: "hidden" }} aria-label="Achievements progress 66%">
-                    <div style={{ width: "66%", height: "100%", background: `linear-gradient(90deg, var(--color-surface-raised), #009952)`, borderRadius: 99 }} />
-                  </div>
-                  
-                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                    {ACHIEVEMENTS.map((a, i) => (
-                      <div key={i} className={`achievement-card${a.unlocked ? " unlocked" : ""}`} style={{ opacity: a.unlocked ? 1 : 0.45, filter: a.unlocked ? "none" : "grayscale(1)" }}>
-                        <div style={{ width: 38, height: 38, borderRadius: "var(--radius-sm)", background: a.unlocked ? "rgba(0, 181, 102, 0.08)" : "var(--color-surface-strong)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }} aria-hidden="true">
-                          {a.icon}
-                        </div>
-                        <div style={{ flex: 1 }}>
-                          <h4 style={{ fontWeight: 600, fontSize: 13, color: "var(--color-text-secondary)" }}>{a.label}</h4>
-                          <p style={{ fontSize: 11, color: "var(--color-text-inverse)", opacity: 0.7, marginTop: 1 }}>{a.desc}</p>
-                        </div>
-                        {a.unlocked && <span style={{ fontSize: 14, color: "var(--color-surface-raised)", fontWeight: "bold" }} aria-label="Unlocked">✓</span>}
-                      </div>
-                    ))}
-                  </div>
-                </section>
-              </div>
-            </div>
-
-            {/* PANEL: ORDER HISTORY */}
-            <div 
-              id="panel-orders" 
-              role="tabpanel" 
-              aria-labelledby="tab-orders" 
-              hidden={activeTab !== "orders"}
-              className="profile-fade"
-              style={{ display: activeTab === "orders" ? "block" : "none" }}
-            >
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-                <h2 style={{ fontWeight: 700, fontSize: 18, color: "var(--color-text-secondary)" }}>Order History</h2>
-                <div style={{ display: "flex", gap: 8 }}>
-                  <label htmlFor="filter-orders" className="sr-only">Filter orders</label>
-                  <select id="filter-orders" aria-label="Filter orders" style={{ border: `1px solid rgba(0,0,0,0.08)`, borderRadius: "var(--radius-sm)", padding: "8px 14px", fontSize: 13, color: "var(--color-text-inverse)", background: "white", outline: "none", cursor: "pointer" }}>
-                    <option>All Orders</option>
-                    <option>Delivered</option>
-                    <option>Cancelled</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Orders Cards list */}
-              <div style={{ display: "flex", flexDirection: "column", gap: 14, marginBottom: 40 }}>
-                {ORDERS.map((o, i) => {
-                  const delivered = o.status === "Delivered";
-                  return (
-                    <article 
-                      key={o.id} 
-                      onClick={(e) => { triggerRef.current = e.currentTarget; setSelectedOrder(o); setOrderModalOpen(true); }}
-                      className="order-card card-in" 
-                      style={{ animationDelay: `${i * 0.05}s` }}
-                      tabIndex={0}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault();
-                          triggerRef.current = e.currentTarget;
-                          setSelectedOrder(o);
-                          setOrderModalOpen(true);
-                        }
-                      }}
-                      aria-label={`Order ${o.id} placed on ${o.date}. Click to view details.`}
-                    >
-                      <div style={{ width: 60, height: 60, borderRadius: "var(--radius-sm)", overflow: "hidden", background: "var(--color-surface-strong)", flexShrink: 0 }}>
-                        <img src={o.img} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                      </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
-                          <div>
-                            <h3 style={{ fontWeight: 600, fontSize: 14, color: "var(--color-text-secondary)" }}>Order {o.id}</h3>
-                            <p style={{ fontSize: 11, color: "var(--color-text-inverse)", opacity: 0.6, marginTop: 2 }}>{o.date}</p>
-                          </div>
-                          <div style={{ textAlign: "right" }}>
-                            <p style={{ fontWeight: 700, fontSize: 15, color: "var(--color-text-secondary)" }}>${o.total.toFixed(2)}</p>
-                            <span style={{ fontSize: 11, color: "var(--color-text-inverse)", opacity: 0.7 }}>{o.items.length} items</span>
-                          </div>
-                        </div>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 10 }}>
-                          <p style={{ fontSize: 12, color: "var(--color-text-inverse)", opacity: 0.8, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginRight: 16 }}>
-                            {o.items.join(" + ")}
-                          </p>
-                          <span className="badge" style={{ 
-                            background: delivered ? "rgba(22, 163, 74, 0.12)" : "rgba(220, 38, 38, 0.12)", 
-                            color: delivered ? "#16a34a" : "#dc2626" 
-                          }}>
-                            {delivered ? "✓" : "✕"} {o.status}
-                          </span>
-                        </div>
-                      </div>
-                    </article>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* PANEL: WISHLIST */}
-            <div 
-              id="panel-wishlist" 
-              role="tabpanel" 
-              aria-labelledby="tab-wishlist" 
-              hidden={activeTab !== "wishlist"}
-              className="profile-fade"
-              style={{ display: activeTab === "wishlist" ? "block" : "none" }}
-            >
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-                <h2 style={{ fontWeight: 700, fontSize: 18, color: "var(--color-text-secondary)" }}>
-                  My Wishlist <span style={{ color: "var(--color-text-inverse)", opacity: 0.6, fontWeight: 400, fontSize: 14 }}>— {wishlistItems.filter(w=>w.saved).length} items</span>
-                </h2>
-                <Link href="/collections/plants" style={{ fontSize: 13, color: "var(--color-surface-raised)", textDecoration: "underline", fontWeight: 600 }} className="breadcrumb-link">Browse All Plants →</Link>
-              </div>
-
-              {/* Wishlist Items Grid */}
-              <div className="wish-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 18, marginBottom: 40 }}>
-                {wishlistItems.map((item, i) => {
-                  if (!item.saved) return null;
-                  return (
-                    <article key={item.id} className="wish-card card-in" style={{ animationDelay: `${i * 0.05}s` }}>
-                      <div style={{ position: "relative", height: 170 }}>
-                        <img src={item.img} alt={`Product photo of ${item.name}`} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                        <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, rgba(0, 0, 0, 0.3) 0%, transparent 50%)" }} />
-                        <button
-                          onClick={() => handleHeartToggle(item.id, item.name)}
-                          aria-label={`Remove ${item.name} from wishlist`}
-                          style={{ position: "absolute", top: 10, right: 10, width: 32, height: 32, borderRadius: "50%", background: "white", border: "none", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 2px 8px rgba(0,0,0,.15)", cursor: "pointer", animation: item.saved ? "heartPop .35s ease" : undefined }}
-                        >
-                          <HeartIcon filled={item.saved} />
-                        </button>
-                      </div>
-                      <div style={{ padding: 14 }}>
-                        <h3 style={{ fontWeight: 600, fontSize: 14, color: "var(--color-text-secondary)", marginBottom: 4 }}>{item.name}</h3>
-                        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
-                          <Stars rating={item.rating} />
-                          <span style={{ fontSize: 11, color: "var(--color-text-inverse)", opacity: 0.6 }} aria-label={`${item.reviews} reviews`}>({item.reviews})</span>
-                        </div>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                          <p style={{ fontWeight: 700, fontSize: 15, color: "var(--color-text-secondary)" }}>${item.price.toFixed(2)}</p>
-                          <button 
-                            className="green-btn" 
-                            style={{ fontSize: 11, padding: "6px 12px" }}
-                            onClick={() => handleAddToCart(item.name)}
-                          >
-                            Add to Cart
-                          </button>
-                        </div>
-                      </div>
-                    </article>
-                  );
-                })}
-
-                {wishlistItems.filter(w => w.saved).length === 0 && (
-                  <div style={{ gridColumn: "1/-1", border: `2px dashed rgba(0,0,0,0.08)`, borderRadius: "var(--radius-md)", padding: "64px 24px", textAlign: "center" }}>
-                    <p style={{ fontSize: 36, marginBottom: 12 }}>❤️</p>
-                    <h3 style={{ fontWeight: 600, fontSize: 15, color: "var(--color-text-secondary)", marginBottom: 4 }}>No Saved Items</h3>
-                    <p style={{ fontSize: 13, color: "var(--color-text-inverse)", opacity: 0.7, marginBottom: 18 }}>Your wishlist is empty. Add plants you love to save them here.</p>
-                    <Link href="/collections/plants" className="green-btn">Explore Plants</Link>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* PANEL: SAVED CARDS (BILLING) */}
-            <div 
-              id="panel-billing" 
-              role="tabpanel" 
-              aria-labelledby="tab-billing" 
-              hidden={activeTab !== "billing"}
-              className="profile-fade"
-              style={{ display: activeTab === "billing" ? "block" : "none" }}
-            >
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-                <h2 style={{ fontWeight: 700, fontSize: 18, color: "var(--color-text-secondary)" }}>Saved Payment Methods</h2>
-              </div>
-              
-              <div className="billing-flex" style={{ display: "flex", gap: 32, flexWrap: "wrap", alignItems: "flex-start", marginBottom: 40 }}>
-                {/* Left: saved cards list */}
-                <div style={{ flex: 1, minWidth: 320, display: "flex", flexDirection: "column", gap: 14 }}>
-                  <p style={{ fontSize: 13, color: "var(--color-text-inverse)", opacity: 0.7, marginBottom: 4 }}>Manage your credit and debit options for faster checkout flows:</p>
-                  
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 16 }}>
-                    {savedCards.map(card => (
-                      <div key={card.id} className="card-in">
-                        <CreditCard
-                          number={card.number}
-                          name={card.name}
-                          expiry={card.expiry}
-                          type={card.type}
-                          color={card.color}
-                          onDelete={() => handleDeleteCard(card.id)}
-                        />
-                      </div>
-                    ))}
-                    {savedCards.length === 0 && (
-                      <div style={{ gridColumn: "1/-1", border: `2px dashed rgba(0,0,0,0.08)`, borderRadius: "var(--radius-md)", padding: "48px 24px", textAlign: "center" }}>
-                        <p style={{ fontSize: 32, marginBottom: 8 }}>💳</p>
-                        <h3 style={{ fontWeight: 600, fontSize: 14, color: "var(--color-text-secondary)", marginBottom: 4 }}>No Saved Cards</h3>
-                        <p style={{ fontSize: 12, color: "var(--color-text-inverse)", opacity: 0.6 }}>Register your primary cards to simplify future purchases.</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Right: add form + live preview */}
-                <div style={{ width: 340, flexShrink: 0, display: "flex", flexDirection: "column", gap: 20 }} className="billing-form-col">
-                  <div style={{ background: "white", borderRadius: "var(--radius-lg)", padding: 24, border: `1px solid rgba(0, 0, 0, 0.08)`, boxShadow: "0 4px 20px rgba(0,0,0,0.03)" }}>
-                    <h3 style={{ fontWeight: 700, fontSize: 15, color: "var(--color-text-secondary)", marginBottom: 18 }}>Add New Card</h3>
-                    
-                    {/* Live Preview card */}
-                    <div style={{ marginBottom: 24, display: "flex", justifyContent: "center" }}>
-                      <CreditCard
-                        number={formNumber}
-                        name={formName}
-                        expiry={formExpiry}
-                        type={getCardType(formNumber)}
-                        color="linear-gradient(135deg, #1e293b 0%, #0f172a 100%)"
-                      />
-                    </div>
-
-                    {/* Form fields */}
-                    <form onSubmit={handleAddCard} style={{ display: "flex", flexDirection: "column", gap: 14 }} noValidate>
-                      <div>
-                        <label htmlFor="card-number" style={{ fontSize: 11, fontWeight: 600, color: "var(--color-text-inverse)", opacity: 0.7, display: "block", marginBottom: 5, textTransform: "uppercase" }}>
-                          Card Number <span style={{ color: "var(--color-surface-raised)" }} aria-hidden="true">*</span>
-                        </label>
-                        <input 
-                          id="card-number"
-                          value={formNumber} 
-                          onChange={handleNumberChange} 
-                          onBlur={() => { setCardTouched(prev => ({ ...prev, number: true })); validateCardField("number", formNumber); }}
-                          placeholder="4111 2222 3333 4444" 
-                          aria-required="true"
-                          aria-invalid={!!cardErrors.number}
-                          aria-describedby={cardErrors.number ? "card-number-error" : undefined}
-                          className={`edit-input ${cardTouched.number && cardErrors.number ? "input-error" : cardTouched.number ? "input-valid" : ""}`}
-                        />
-                        {cardTouched.number && cardErrors.number && (
-                          <div id="card-number-error" role="alert" className="input-error-msg">⚠️ {cardErrors.number}</div>
-                        )}
-                      </div>
-
-                      <div>
-                        <label htmlFor="card-name" style={{ fontSize: 11, fontWeight: 600, color: "var(--color-text-inverse)", opacity: 0.7, display: "block", marginBottom: 5, textTransform: "uppercase" }}>
-                          Cardholder Name <span style={{ color: "var(--color-surface-raised)" }} aria-hidden="true">*</span>
-                        </label>
-                        <input 
-                          id="card-name"
-                          value={formName} 
-                          onChange={(e) => { setFormName(e.target.value); if (cardTouched.name) validateCardField("name", e.target.value); }} 
-                          onBlur={() => { setCardTouched(prev => ({ ...prev, name: true })); validateCardField("name", formName); }}
-                          placeholder="SUBHAJIT GHOSH" 
-                          aria-required="true"
-                          aria-invalid={!!cardErrors.name}
-                          aria-describedby={cardErrors.name ? "card-name-error" : undefined}
-                          style={{ textTransform: "uppercase" }}
-                          className={`edit-input ${cardTouched.name && cardErrors.name ? "input-error" : cardTouched.name ? "input-valid" : ""}`}
-                        />
-                        {cardTouched.name && cardErrors.name && (
-                          <div id="card-name-error" role="alert" className="input-error-msg">⚠️ {cardErrors.name}</div>
-                        )}
-                      </div>
-
-                      <div style={{ display: "flex", gap: 12 }}>
-                        <div style={{ flex: 1 }}>
-                          <label htmlFor="card-expiry" style={{ fontSize: 11, fontWeight: 600, color: "var(--color-text-inverse)", opacity: 0.7, display: "block", marginBottom: 5, textTransform: "uppercase" }}>
-                            Expiry <span style={{ color: "var(--color-surface-raised)" }} aria-hidden="true">*</span>
-                          </label>
-                          <input 
-                            id="card-expiry"
-                            value={formExpiry} 
-                            onChange={handleExpiryChange} 
-                            onBlur={() => { setCardTouched(prev => ({ ...prev, expiry: true })); validateCardField("expiry", formExpiry); }}
-                            placeholder="MM/YY" 
-                            aria-required="true"
-                            aria-invalid={!!cardErrors.expiry}
-                            aria-describedby={cardErrors.expiry ? "card-expiry-error" : undefined}
-                            className={`edit-input ${cardTouched.expiry && cardErrors.expiry ? "input-error" : cardTouched.expiry ? "input-valid" : ""}`}
-                          />
-                          {cardTouched.expiry && cardErrors.expiry && (
-                            <div id="card-expiry-error" role="alert" className="input-error-msg">⚠️ {cardErrors.expiry}</div>
-                          )}
-                        </div>
-                        <div style={{ flex: 1 }}>
-                          <label htmlFor="card-cvv" style={{ fontSize: 11, fontWeight: 600, color: "var(--color-text-inverse)", opacity: 0.7, display: "block", marginBottom: 5, textTransform: "uppercase" }}>
-                            CVV <span style={{ color: "var(--color-surface-raised)" }} aria-hidden="true">*</span>
-                          </label>
-                          <input 
-                            id="card-cvv"
-                            type="password" 
-                            value={formCvv} 
-                            onChange={handleCvvChange} 
-                            onBlur={() => { setCardTouched(prev => ({ ...prev, cvv: true })); validateCardField("cvv", formCvv); }}
-                            placeholder="•••" 
-                            aria-required="true"
-                            aria-invalid={!!cardErrors.cvv}
-                            aria-describedby={cardErrors.cvv ? "card-cvv-error" : undefined}
-                            className={`edit-input ${cardTouched.cvv && cardErrors.cvv ? "input-error" : cardTouched.cvv ? "input-valid" : ""}`}
-                          />
-                          {cardTouched.cvv && cardErrors.cvv && (
-                            <div id="card-cvv-error" role="alert" className="input-error-msg">⚠️ {cardErrors.cvv}</div>
-                          )}
-                        </div>
-                      </div>
-
-                      <button type="submit" className="green-btn" style={{ marginTop: 8, width: "100%", justifyContent: "center" }}>
-                        Save Card
-                      </button>
-                    </form>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* PANEL: SETTINGS */}
-            <div 
-              id="panel-settings" 
-              role="tabpanel" 
-              aria-labelledby="tab-settings" 
-              hidden={activeTab !== "settings"}
-              className="profile-fade"
-              style={{ display: activeTab === "settings" ? "block" : "none" }}
-            >
-              <div className="settings-flex" style={{ display: "flex", gap: 24, alignItems: "flex-start", marginBottom: 40 }}>
-                {/* Left Settings Column */}
-                <div style={{ flex: 1, minWidth: 280, display: "flex", flexDirection: "column", gap: 20 }}>
-                  
-                  {/* Account settings form */}
-                  <section aria-labelledby="heading-account-info" style={{ background: "white", borderRadius: "var(--radius-lg)", padding: 24, border: `1px solid rgba(0, 0, 0, 0.08)` }}>
-                    <h3 id="heading-account-info" style={{ fontWeight: 700, fontSize: 15, color: "var(--color-text-secondary)", marginBottom: 18, display: "flex", alignItems: "center", gap: 8 }}>
-                      <span style={{ width: 32, height: 32, background: "rgba(0, 181, 102, 0.08)", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--color-surface-raised)" }} aria-hidden="true">
-                        <EditIcon />
-                      </span>
-                      Account Information
-                    </h3>
-                    
-                    <form onSubmit={handleUpdateInfo} style={{ display: "flex", flexDirection: "column", gap: 14 }} noValidate>
-                      {[
-                        { key: "name", label: "Full Name", value: settingsName, setValue: setSettingsName, type: "text" },
-                        { key: "email", label: "Email", value: settingsEmail, setValue: setSettingsEmail, type: "email" },
-                        { key: "phone", label: "Phone", value: settingsPhone, setValue: setSettingsPhone, type: "tel" },
-                        { key: "location", label: "Location", value: settingsLocation, setValue: setSettingsLocation, type: "text" },
-                      ].map(f => (
-                        <div key={f.key}>
-                          <label htmlFor={`settings-${f.key}`} style={{ fontSize: 12, fontWeight: 500, color: "var(--color-text-inverse)", opacity: 0.8, display: "block", marginBottom: 5 }}>
-                            {f.label} <span style={{ color: "var(--color-surface-raised)" }} aria-hidden="true">*</span>
-                          </label>
-                          <input 
-                            id={`settings-${f.key}`}
-                            type={f.type} 
-                            value={f.value} 
-                            onChange={(e) => { f.setValue(e.target.value); if (settingsTouched[f.key]) validateSettingsField(f.key, e.target.value); }}
-                            onBlur={() => { setSettingsTouched(prev => ({ ...prev, [f.key]: true })); validateSettingsField(f.key, f.value); }}
-                            aria-required="true"
-                            aria-invalid={!!settingsErrors[f.key]}
-                            aria-describedby={settingsErrors[f.key] ? `settings-${f.key}-error` : undefined}
-                            className={`edit-input ${settingsTouched[f.key] && settingsErrors[f.key] ? "input-error" : settingsTouched[f.key] ? "input-valid" : ""}`}
-                          />
-                          {settingsTouched[f.key] && settingsErrors[f.key] && (
-                            <div id={`settings-${f.key}-error`} role="alert" className="input-error-msg">⚠️ {settingsErrors[f.key]}</div>
-                          )}
-                        </div>
-                      ))}
-                      <button type="submit" className="green-btn" style={{ alignSelf: "flex-start", marginTop: 4 }}>Save Changes</button>
-                    </form>
-                  </section>
-
-                  {/* Password update form */}
-                  <section aria-labelledby="heading-password-change" style={{ background: "white", borderRadius: "var(--radius-lg)", padding: 24, border: `1px solid rgba(0, 0, 0, 0.08)` }}>
-                    <h3 id="heading-password-change" style={{ fontWeight: 700, fontSize: 15, color: "var(--color-text-secondary)", marginBottom: 18, display: "flex", alignItems: "center", gap: 8 }}>
-                      <span style={{ width: 32, height: 32, background: "rgba(200, 168, 75, 0.12)", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--profile-star-fill)" }} aria-hidden="true">
-                        <LockIcon />
-                      </span>
-                      Change Password
-                    </h3>
-                    
-                    <form onSubmit={handleChangePassword} style={{ display: "flex", flexDirection: "column", gap: 12 }} noValidate>
-                      {[
-                        { key: "currentPassword", label: "Current Password", value: currentPassword, setValue: setCurrentPassword },
-                        { key: "newPassword", label: "New Password", value: newPassword, setValue: setNewPassword },
-                        { key: "confirmPassword", label: "Confirm Password", value: confirmPassword, setValue: setConfirmPassword },
-                      ].map(f => (
-                        <div key={f.key}>
-                          <label htmlFor={`pwd-${f.key}`} style={{ fontSize: 12, fontWeight: 500, color: "var(--color-text-inverse)", opacity: 0.8, display: "block", marginBottom: 5 }}>
-                            {f.label} <span style={{ color: "var(--color-surface-raised)" }} aria-hidden="true">*</span>
-                          </label>
-                          <input 
-                            id={`pwd-${f.key}`}
-                            type="password" 
-                            value={f.value} 
-                            placeholder="••••••••"
-                            onChange={(e) => { f.setValue(e.target.value); if (passwordTouched[f.key]) validatePasswordField(f.key, e.target.value); }}
-                            onBlur={() => { setPasswordTouched(prev => ({ ...prev, [f.key]: true })); validatePasswordField(f.key, f.value); }}
-                            aria-required="true"
-                            aria-invalid={!!passwordErrors[f.key]}
-                            aria-describedby={passwordErrors[f.key] ? `pwd-${f.key}-error` : undefined}
-                            className={`edit-input ${passwordTouched[f.key] && passwordErrors[f.key] ? "input-error" : passwordTouched[f.key] ? "input-valid" : ""}`}
-                          />
-                          {passwordTouched[f.key] && passwordErrors[f.key] && (
-                            <div id={`pwd-${f.key}-error`} role="alert" className="input-error-msg">⚠️ {passwordErrors[f.key]}</div>
-                          )}
-                        </div>
-                      ))}
-                      <button type="submit" className="green-btn" style={{ alignSelf: "flex-start", marginTop: 4 }}>Update Password</button>
-                    </form>
-                  </section>
-                </div>
-
-                {/* Right Settings Column */}
-                <div style={{ width: 340, flexShrink: 0, display: "flex", flexDirection: "column", gap: 20 }} className="settings-side-col">
-                  
-                  {/* Notifications Switch list §3.8 */}
-                  <section aria-labelledby="heading-notifications" style={{ background: "white", borderRadius: "var(--radius-lg)", padding: 24, border: `1px solid rgba(0, 0, 0, 0.08)` }}>
-                    <h3 id="heading-notifications" style={{ fontWeight: 700, fontSize: 15, color: "var(--color-text-secondary)", marginBottom: 18, display: "flex", alignItems: "center", gap: 8 }}>
-                      <span style={{ width: 32, height: 32, background: "rgba(37, 99, 235, 0.12)", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", color: "#2563eb" }} aria-hidden="true">
-                        <BellIcon />
-                      </span>
-                      Notifications
-                    </h3>
-                    
-                    {[
-                      { key: "water" as const, label: "Watering Reminders", desc: "Daily plant care alerts" },
-                      { key: "orders" as const, label: "Order Updates", desc: "Shipping & delivery status" },
-                      { key: "promo" as const, label: "Promotions", desc: "Deals & discount offers" },
-                      { key: "tips" as const, label: "Plant Care Tips", desc: "Weekly growing advice" },
-                    ].map((n, idx) => (
-                      <div key={n.key} className="setting-row">
-                        <div id={`label-switch-${n.key}`}>
-                          <p style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-secondary)" }}>{n.label}</p>
-                          <p style={{ fontSize: 11, color: "var(--color-text-inverse)", opacity: 0.6, marginTop: 2 }}>{n.desc}</p>
-                        </div>
-                        
-                        <button
-                          className="toggle-track"
-                          style={{ background: notifPref[n.key] ? "var(--color-surface-raised)" : "rgba(0,0,0,0.12)" }}
-                          onClick={() => toggleNotifPref(n.key)}
-                          role="switch"
-                          aria-checked={notifPref[n.key]}
-                          aria-labelledby={`label-switch-${n.key}`}
-                        >
-                          <div className="toggle-thumb" style={{ transform: notifPref[n.key] ? "translateX(22px)" : "translateX(2px)" }} />
-                        </button>
-                      </div>
-                    ))}
-                  </section>
-
-                  {/* Danger Zone */}
-                  <section aria-labelledby="heading-danger-zone" style={{ background: "white", borderRadius: "var(--radius-lg)", padding: 24, border: `1.5px solid #FEE2E2` }}>
-                    <h3 id="heading-danger-zone" style={{ fontWeight: 700, fontSize: 15, color: "var(--profile-danger-text)", marginBottom: 14 }}>Danger Zone</h3>
-                    <p style={{ fontSize: 13, color: "var(--color-text-inverse)", opacity: 0.8, marginBottom: 16, lineHeight: 1.5 }}>These actions are permanent and cannot be undone. Please be careful.</p>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                      <button 
-                        onClick={(e) => { triggerRef.current = e.currentTarget; setDangerType("export"); setDangerModalOpen(true); }}
-                        style={{ background: "transparent", border: "1.5px solid #FCA5A5", color: "var(--profile-danger-text)", borderRadius: 10, padding: "10px 16px", fontSize: 13, fontWeight: 500, cursor: "pointer", textAlign: "left", transition: "all var(--motion-duration-instant)" }}
-                        onMouseEnter={e => (e.currentTarget.style.background = "#FEE2E2")}
-                        onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
-                      >
-                        Export My Data
-                      </button>
-                      
-                      <button 
-                        onClick={(e) => { triggerRef.current = e.currentTarget; setDangerType("delete"); setDangerModalOpen(true); }}
-                        style={{ background: "transparent", border: "1.5px solid #FCA5A5", color: "var(--profile-danger-text)", borderRadius: 10, padding: "10px 16px", fontSize: 13, fontWeight: 500, cursor: "pointer", textAlign: "left", transition: "all var(--motion-duration-instant)" }}
-                        onMouseEnter={e => (e.currentTarget.style.background = "#FEE2E2")}
-                        onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
-                      >
-                        Delete Account Permanently
-                      </button>
-                    </div>
-                  </section>
-                </div>
-              </div>
-            </div>
-
-            <div style={{ height: 64 }} />
-          </div>
-
-          {/* ────────────────────────────────────────────────────────
-             INTERACTIVE MODALS Shells (§3.12)
-             ──────────────────────────────────────────────────────── */}
-          
-          {/* MODAL A: ADD PLANT */}
-          {plantModalOpen && (
-            <div 
-              role="dialog" 
-              aria-modal="true" 
-              aria-labelledby="modal-plant-heading" 
-              style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, padding: 16 }}
-            >
-              <div 
-                ref={modalRef}
-                style={{ background: "var(--color-surface-strong)", borderRadius: "var(--radius-xl)", padding: 32, maxWidth: 500, width: "100%", boxShadow: "var(--modal-shadow)", position: "relative", animation: "scaleIn var(--motion-duration-fast) ease" }}
-              >
-                {/* Close Button */}
-                <button 
-                  onClick={() => { setPlantModalOpen(false); triggerRef.current?.focus(); }}
-                  aria-label="Close dialog" 
-                  style={{ position: "absolute", top: 16, right: 16, width: 36, height: 36, borderRadius: "50%", background: "rgba(0,0,0,0.05)", border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
-                >
-                  ✕
-                </button>
-
-                <h2 id="modal-plant-heading" style={{ fontFamily: "Outfit, sans-serif", fontWeight: 700, fontSize: 18, color: "var(--color-text-secondary)", marginBottom: 18 }}>Add Plant to Garden</h2>
-                
-                <form onSubmit={handleAddPlant} style={{ display: "flex", flexDirection: "column", gap: 14 }} noValidate>
-                  <div>
-                    <label htmlFor="plant-name" style={{ fontSize: 12, fontWeight: 600, color: "var(--color-text-inverse)", opacity: 0.8, display: "block", marginBottom: 5 }}>
-                      Plant Name <span style={{ color: "var(--color-surface-raised)" }} aria-hidden="true">*</span>
-                    </label>
-                    <input 
-                      id="plant-name" 
-                      value={newPlantName} 
-                      onChange={(e) => { setNewPlantName(e.target.value); if (plantTouched.name) validatePlantField("name", e.target.value); }} 
-                      onBlur={() => { setPlantTouched(prev => ({ ...prev, name: true })); validatePlantField("name", newPlantName); }}
-                      placeholder="e.g. Ficus Lyrata" 
-                      aria-required="true"
-                      aria-invalid={!!plantFormErrors.name}
-                      aria-describedby={plantFormErrors.name ? "plant-name-error" : undefined}
-                      className={`edit-input ${plantTouched.name && plantFormErrors.name ? "input-error" : ""}`}
-                    />
-                    {plantTouched.name && plantFormErrors.name && (
-                      <div id="plant-name-error" role="alert" className="input-error-msg">⚠️ {plantFormErrors.name}</div>
-                    )}
-                  </div>
-
-                  <div style={{ display: "flex", gap: 12 }}>
-                    <div style={{ flex: 1 }}>
-                      <label htmlFor="plant-pot" style={{ fontSize: 12, fontWeight: 600, color: "var(--color-text-inverse)", opacity: 0.8, display: "block", marginBottom: 5 }}>Pot Style</label>
-                      <select 
-                        id="plant-pot" 
-                        value={newPlantPot} 
-                        onChange={(e) => setNewPlantPot(e.target.value)} 
-                        style={{ border: `1.5px solid rgb(212, 212, 212)`, borderRadius: "var(--radius-sm)", padding: 10, fontSize: 13, background: "white", width: "100%", outline: "none" }}
-                      >
-                        {["Terracotta", "White Ceramic", "Rattan Basket", "Black Geometric", "Minimalist Plastic"].map(pot => (
-                          <option key={pot} value={pot}>{pot}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div style={{ flex: 1 }}>
-                      <label htmlFor="plant-light" style={{ fontSize: 12, fontWeight: 600, color: "var(--color-text-inverse)", opacity: 0.8, display: "block", marginBottom: 5 }}>Sunlight</label>
-                      <select 
-                        id="plant-light" 
-                        value={newPlantLight} 
-                        onChange={(e) => setNewPlantLight(e.target.value)} 
-                        style={{ border: `1.5px solid rgb(212, 212, 212)`, borderRadius: "var(--radius-sm)", padding: 10, fontSize: 13, background: "white", width: "100%", outline: "none" }}
-                      >
-                        {["Bright indirect", "Medium indirect", "Low light", "Direct sun", "Full sun"].map(light => (
-                          <option key={light} value={light}>{light}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-
-                  <div style={{ display: "flex", gap: 12 }}>
-                    <div style={{ flex: 1 }}>
-                      <label htmlFor="plant-water" style={{ fontSize: 12, fontWeight: 600, color: "var(--color-text-inverse)", opacity: 0.8, display: "block", marginBottom: 5 }}>Water Schedule</label>
-                      <select 
-                        id="plant-water" 
-                        value={newPlantWater} 
-                        onChange={(e) => setNewPlantWater(e.target.value)} 
-                        style={{ border: `1.5px solid rgb(212, 212, 212)`, borderRadius: "var(--radius-sm)", padding: 10, fontSize: 13, background: "white", width: "100%", outline: "none" }}
-                      >
-                        {["Today", "Tomorrow", "In 2 days", "In 3 days", "In 5 days", "In 7 days"].map(w => (
-                          <option key={w} value={w}>{w}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div style={{ flex: 1 }}>
-                      <label htmlFor="plant-health" style={{ fontSize: 12, fontWeight: 600, color: "var(--color-text-inverse)", opacity: 0.8, display: "block", marginBottom: 5 }}>Health (%)</label>
-                      <input 
-                        id="plant-health" 
-                        type="number" 
-                        value={newPlantHealth} 
-                        onChange={(e) => { setNewPlantHealth(Number(e.target.value)); if (plantTouched.health) validatePlantField("health", e.target.value); }} 
-                        onBlur={() => { setPlantTouched(prev => ({ ...prev, health: true })); validatePlantField("health", newPlantHealth); }}
-                        min="0"
-                        max="100"
-                        aria-required="true"
-                        aria-invalid={!!plantFormErrors.health}
-                        aria-describedby={plantFormErrors.health ? "plant-health-error" : undefined}
-                        className={`edit-input ${plantTouched.health && plantFormErrors.health ? "input-error" : ""}`}
-                      />
-                      {plantTouched.health && plantFormErrors.health && (
-                        <div id="plant-health-error" role="alert" className="input-error-msg">⚠️ {plantFormErrors.health}</div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 12 }}>
-                    <button type="button" onClick={() => { setPlantModalOpen(false); triggerRef.current?.focus(); }} className="outline-btn">Cancel</button>
-                    <button type="submit" className="green-btn">Save Plant</button>
-                  </div>
-                </form>
-              </div>
-            </div>
-          )}
-
-          {/* MODAL B: ORDER DETAILS */}
-          {orderModalOpen && selectedOrder && (
-            <div 
-              role="dialog" 
-              aria-modal="true" 
-              aria-labelledby="modal-order-heading" 
-              style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, padding: 16 }}
-            >
-              <div 
-                ref={modalRef}
-                style={{ background: "var(--color-surface-strong)", borderRadius: "var(--radius-xl)", padding: 32, maxWidth: 540, width: "100%", boxShadow: "var(--modal-shadow)", position: "relative", animation: "scaleIn var(--motion-duration-fast) ease" }}
-              >
-                {/* Close */}
-                <button 
-                  onClick={() => { setOrderModalOpen(false); triggerRef.current?.focus(); }}
-                  aria-label="Close dialog" 
-                  style={{ position: "absolute", top: 16, right: 16, width: 36, height: 36, borderRadius: "50%", background: "rgba(0,0,0,0.05)", border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
-                >
-                  ✕
-                </button>
-
-                <h2 id="modal-order-heading" style={{ fontWeight: 700, fontSize: 18, color: "var(--color-text-secondary)", marginBottom: 6 }}>Order Details</h2>
-                <p style={{ fontSize: 12, color: "var(--color-text-inverse)", opacity: 0.6, marginBottom: 20 }}>Invoice ID: {selectedOrder.id} • Purchased on {selectedOrder.date}</p>
-
-                <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-                  
-                  {/* Items summary */}
-                  <div>
-                    <h3 style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-secondary)", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.5px" }}>Items Purchased</h3>
-                    <div style={{ background: "white", border: "1px solid rgba(0,0,0,0.08)", borderRadius: "var(--radius-sm)", padding: 14, display: "flex", flexDirection: "column", gap: 10 }}>
-                      {selectedOrder.items.map((item: string, idx: number) => (
-                        <div key={idx} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 13 }}>
-                          <span style={{ color: "var(--color-text-inverse)" }}>{item}</span>
-                          <span style={{ fontWeight: 600, color: "var(--color-text-secondary)" }}>1x</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Payment and shipping */}
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-                    <div>
-                      <h3 style={{ fontSize: 11, fontWeight: 600, color: "var(--color-text-inverse)", opacity: 0.7, marginBottom: 4, textTransform: "uppercase" }}>Payment</h3>
-                      <p style={{ fontSize: 13, color: "var(--color-text-secondary)", fontWeight: 500 }}>{selectedOrder.paymentMethod}</p>
-                    </div>
-                    <div>
-                      <h3 style={{ fontSize: 11, fontWeight: 600, color: "var(--color-text-inverse)", opacity: 0.7, marginBottom: 4, textTransform: "uppercase" }}>Total Price</h3>
-                      <p style={{ fontSize: 15, color: "var(--color-surface-raised)", fontWeight: 700 }}>${selectedOrder.total.toFixed(2)}</p>
-                    </div>
-                  </div>
-
-                  <div>
-                    <h3 style={{ fontSize: 11, fontWeight: 600, color: "var(--color-text-inverse)", opacity: 0.7, marginBottom: 4, textTransform: "uppercase" }}>Delivery Address</h3>
-                    <p style={{ fontSize: 13, color: "var(--color-text-secondary)", lineHeight: 1.45 }}>{selectedOrder.address}</p>
-                  </div>
-
-                  <div style={{ borderTop: "1px solid rgba(0,0,0,0.08)", paddingTop: 14, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <div>
-                      <h3 style={{ fontSize: 11, fontWeight: 600, color: "var(--color-text-inverse)", opacity: 0.7, marginBottom: 2, textTransform: "uppercase" }}>Est. Delivery</h3>
-                      <p style={{ fontSize: 13, color: "var(--color-text-secondary)", fontWeight: 500 }}>{selectedOrder.deliveryDate}</p>
-                    </div>
-                    <span className="badge" style={{ 
-                      background: selectedOrder.status === "Delivered" ? "rgba(22, 163, 74, 0.12)" : "rgba(220, 38, 38, 0.12)", 
-                      color: selectedOrder.status === "Delivered" ? "#16a34a" : "#dc2626" 
-                    }}>
-                      {selectedOrder.status}
-                    </span>
-                  </div>
-
-                  <button 
-                    onClick={() => { setOrderModalOpen(false); triggerRef.current?.focus(); }}
-                    className="green-btn" 
-                    style={{ width: "100%", justifyContent: "center", marginTop: 6 }}
-                  >
-                    Done
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* MODAL C: DANGER ZONE CONFIRMATION */}
-          {dangerModalOpen && (
-            <div 
-              role="dialog" 
-              aria-modal="true" 
-              aria-labelledby="modal-danger-heading" 
-              style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, padding: 16 }}
-            >
-              <div 
-                ref={modalRef}
-                style={{ background: "var(--color-surface-strong)", borderRadius: "var(--radius-xl)", padding: 32, maxWidth: 450, width: "100%", boxShadow: "var(--modal-shadow)", position: "relative", animation: "scaleIn var(--motion-duration-fast) ease" }}
-              >
-                <h2 id="modal-danger-heading" style={{ fontWeight: 700, fontSize: 18, color: "var(--profile-danger-text)", marginBottom: 12 }}>
-                  {dangerType === "export" ? "Confirm Data Export" : "Confirm Account Reset"}
-                </h2>
-                <p style={{ fontSize: 13, color: "var(--color-text-inverse)", opacity: 0.8, lineHeight: 1.5, marginBottom: 20 }}>
-                  {dangerType === "export" 
-                    ? "We will compile all your account details, plant history, saved cards, and transaction records and email them to you. Do you wish to continue?"
-                    : "This action will clear all your local customizations (my plants list, billing credentials, name changes) and revert back to standard mock values. This cannot be undone."}
-                </p>
-
-                <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-                  <button onClick={() => { setDangerModalOpen(false); triggerRef.current?.focus(); }} className="outline-btn">Cancel</button>
-                  <button 
-                    onClick={executeDangerAction} 
-                    className="green-btn" 
-                    style={{ background: dangerType === "delete" ? "var(--profile-danger-text)" : "var(--color-surface-raised)" }}
-                  >
-                    {dangerType === "export" ? "Export Data" : "Yes, Reset Data"}
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* ────────────────────────────────────────────────────────
-             TOAST NOTIFICATION STACK (§3.13)
-             ──────────────────────────────────────────────────────── */}
-          <div 
-            style={{ position: "fixed", bottom: 24, left: "50%", transform: "translateX(-50%)", display: "flex", flexDirection: "column", gap: 8, zIndex: 400 }}
-            aria-live="polite"
-            role="status"
-          >
-            {toasts.map(toast => (
-              <div
-                key={toast.id}
-                style={{
-                  background: "var(--color-text-secondary)",
-                  color: "var(--color-text-tertiary)",
-                  fontSize: 13,
-                  fontWeight: 500,
-                  borderRadius: "var(--radius-md)",
-                  padding: "10px 20px",
-                  boxShadow: "0 10px 25px rgba(0,0,0,0.18)",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 10,
-                  borderLeft: toast.type === "success" 
-                    ? "4px solid var(--color-surface-raised)" 
-                    : toast.type === "error" 
-                      ? "4px solid var(--profile-danger-text)" 
-                      : "4px solid rgba(0,181,102,0.6)",
-                  animation: "fadeUp var(--motion-duration-fast) ease both"
-                }}
-              >
-                <span>{toast.type === "success" ? "✓" : toast.type === "error" ? "✕" : "ℹ"}</span>
-                {toast.text}
-              </div>
-            ))}
-          </div>
-
-          {/* ────────────────────────────────────────────────────────
-             TOAST ALERT FOR LIVE UPDATES
-             ──────────────────────────────────────────────────────── */}
-
-          {/* ────────────────────────────────────────────────────────
-             WHATSAPP FLOATING ACTION BUTTON (§3.15)
-             ──────────────────────────────────────────────────────── */}
-          <Link
-            href="https://api.whatsapp.com/send?phone=919876543210"
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label="Chat with us on WhatsApp"
-            style={{
-              position: "fixed",
-              bottom: 24,
-              right: 24,
-              width: 56,
-              height: 56,
-              borderRadius: "var(--radius-step7)",
-              background: "#25D366",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              boxShadow: "var(--fab-shadow)",
-              zIndex: 200,
-              cursor: "pointer",
-              transition: "transform var(--motion-duration-instant) ease, box-shadow var(--motion-duration-instant) ease"
-            }}
-            onMouseEnter={e => {
-              e.currentTarget.style.transform = "scale(1.08)";
-            }}
-            onMouseLeave={e => {
-              e.currentTarget.style.transform = "scale(1)";
-            }}
-          >
-            <svg width="28" height="28" viewBox="0 0 448 512" fill="white" aria-hidden="true">
-              <path d="M380.9 97.1C339 55.1 283.2 32 223.9 32c-122.4 0-222 99.6-222 222 0 39.1 10.2 77.3 29.6 111L0 480l117.7-30.9c32.4 17.7 68.9 27 106.1 27h.1c122.3 0 224.1-99.6 224.1-222 0-59.3-25.2-115-67.1-157zm-157 341.6c-33.2 0-65.7-8.9-94-25.7l-6.7-4-69.8 18.3L72 359.2l-4.4-7c-18.5-29.4-28.2-63.3-28.2-98.2 0-101.7 82.8-184.5 184.6-184.5 49.3 0 95.6 19.2 130.4 54.1 34.8 34.9 56.2 81.2 56.1 130.5 0 101.8-84.9 184.6-186.6 184.6zm101.2-138.2c-5.5-2.8-32.8-16.2-37.9-18-5.1-1.9-8.8-2.8-12.5 2.8-3.7 5.6-14.3 18-17.6 21.8-3.2 3.7-6.5 4.2-12 1.4-32.6-16.3-54-29.1-75.5-66-5.7-9.8 5.7-9.1 16.3-30.3 1.8-3.7 .9-6.9-.5-9.7-1.4-2.8-12.5-30.1-17.1-41.2-4.5-10.8-9.1-9.3-12.5-9.5-3.2-.2-6.9-.2-10.6-.2-3.7 0-9.7 1.4-14.8 6.9-5.1 5.6-19.4 19-19.4 46.3 0 27.3 19.9 53.7 22.6 57.4 2.8 3.7 39.1 59.7 94.8 83.8 35.2 15.2 49 16.5 66.6 13.9 10.7-1.6 32.8-13.4 37.4-26.4 4.6-13 4.6-24.1 3.2-26.4-1.3-2.5-5-3.9-10.5-6.6z"/>
-            </svg>
-          </Link>
-          
-        </main>
+        </Modal>
       )}
+    </section>
+  );
+}
+/* ─────────────────────────────────────────────
+   NAV ITEMS CONFIG
+───────────────────────────────────────────── */
+const NAV_ITEMS = [
+  { id: "overview", icon: "🏠", label: "Overview", badge: null },
+  { id: "orders", icon: "📦", label: "My Orders", badge: USER.ordersCount },
+  { id: "wishlist", icon: "♡", label: "Wishlist", badge: USER.wishlistCount },
+  { id: "plants", icon: "🌿", label: "My Plants", badge: USER.plantsCount },
+  { id: "personal-info", icon: "👤", label: "Personal Info", badge: null },
+  { id: "addresses", icon: "📍", label: "Addresses", badge: 2 },
+  { id: "loyalty", icon: "🏅", label: "Loyalty Rewards", badge: `${USER.points} pts` },
+  { id: "payments", icon: "💳", label: "Payment Methods", badge: null },
+  { id: "reviews", icon: "⭐", label: "My Reviews", badge: USER.reviewsCount },
+  { id: "notifications", icon: "🔔", label: "Notifications", badge: 2 },
+  { id: "security", icon: "🔒", label: "Security", badge: null },
+];
+const MOBILE_TABS = [
+  { id: "overview", icon: "🏠", label: "Home" },
+  { id: "orders", icon: "📦", label: "Orders" },
+  { id: "wishlist", icon: "♡", label: "Wishlist" },
+  { id: "personal-info", icon: "👤", label: "Profile" },
+];
+/* ─────────────────────────────────────────────
+   MAIN PROFILE PAGE
+───────────────────────────────────────────── */
+export default function ProfilePage() {
+  const [activeSection, setActiveSection] = useState("overview");
+  const [showSignOut, setShowSignOut] = useState(false);
+  const { toasts, addToast } = useToast();
+  // Inject profile CSS tokens
+  useEffect(() => {
+    const styleId = "profile-tokens";
+    if (!document.getElementById(styleId)) {
+      const style = document.createElement("style");
+      style.id = styleId;
+      style.textContent = TOKENS;
+      document.head.appendChild(style);
+    }
+    return () => { document.getElementById(styleId)?.remove(); };
+  }, []);
+  const handleNavigate = (section: string) => setActiveSection(section);
+  const renderSection = () => {
+    switch (activeSection) {
+      case "overview": return <OverviewSection onNavigate={handleNavigate} />;
+      case "orders": return <OrdersSection onToast={addToast} />;
+      case "wishlist": return <WishlistSection onToast={addToast} />;
+      case "plants": return <PlantsSection onToast={addToast} />;
+      case "personal-info": return <PersonalInfoSection onToast={addToast} />;
+      case "addresses": return <AddressesSection onToast={addToast} />;
+      case "loyalty": return <LoyaltySection onToast={addToast} />;
+      case "payments": return <PaymentSection onToast={addToast} />;
+      case "reviews": return <ReviewsSection onToast={addToast} />;
+      case "notifications": return <NotificationsSection onToast={addToast} />;
+      case "security": return <SecuritySection onToast={addToast} />;
+      default: return <OverviewSection onNavigate={handleNavigate} />;
+    }
+  };
+  return (
+    <div className="profile-page">
+      <h1 className="sr-only">My Account</h1>
+      {/* Announcement bar */}
+      <div className="announcement-bar">
+        🌿 Free delivery on orders above ₹499 · Use code HERO10 for 10% off
+      </div>
+      {/* Navbar */}
+      <nav className="profile-navbar" aria-label="Main navigation">
+        <Link href="/" className="profile-navbar-brand">
+          <LeafLogo />
+          <span>Hero<span>.</span></span>
+        </Link>
+        <div className="profile-navbar-actions">
+          <Link href="/" style={{ fontSize: 13, color: "var(--profile-body)", textDecoration: "none" }}>Shop</Link>
+          <Link href="/ai-care" style={{ fontSize: 13, color: "var(--profile-body)", textDecoration: "none" }}>AI Care</Link>
+          <Link href="/cart">
+            <div style={{ position: "relative", width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="9" cy="21" r="1" /><circle cx="20" cy="21" r="1" />
+                <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
+              </svg>
+              <span style={{ position: "absolute", top: 0, right: 0, width: 16, height: 16, background: "var(--color-surface-raised)", borderRadius: "50%", fontSize: 9, fontWeight: 700, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center" }}>3</span>
+            </div>
+          </Link>
+          <div className="avatar-chip" title={`${USER.firstName} ${USER.lastName}`}>{USER.initials}</div>
+        </div>
+      </nav>
+      {/* Breadcrumb */}
+      <div style={{ maxWidth: 1280, margin: "0 auto", padding: "0 48px" }}>
+        <nav className="breadcrumb" aria-label="Breadcrumb">
+          <ol style={{ display: "flex", listStyle: "none", gap: 8, alignItems: "center", padding: 0, margin: 0 }}>
+            <li><Link href="/" style={{ color: "var(--profile-body)", textDecoration: "none" }}>Home</Link></li>
+            <li className="breadcrumb-sep" aria-hidden="true">/</li>
+            <li aria-current="page" className="breadcrumb-current">My Account</li>
+          </ol>
+        </nav>
+      </div>
+      {/* Main layout */}
+      <div style={{ maxWidth: 1280, margin: "0 auto", padding: "0 48px 48px", display: "flex", gap: 24, alignItems: "flex-start" }}>
+        {/* Sidebar */}
+        <aside className="sidebar-desktop" aria-label="Account sidebar" style={{ width: 260, flexShrink: 0, position: "sticky", top: 64, height: "calc(100vh - 64px)", overflowY: "auto", background: "var(--profile-sidebar-bg)", borderRight: "1px solid var(--profile-divider)", boxShadow: "var(--shadow-sidebar)", marginRight: 0, borderRadius: "0 var(--radius-lg) var(--radius-lg) 0", padding: "16px 12px" }}>
+          {/* Profile hero */}
+          <div style={{ padding: "4px 4px 16px" }}>
+            {/* Avatar */}
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
+              <div style={{ position: "relative", width: 56, height: 56, flexShrink: 0 }}>
+                <div style={{ width: 56, height: 56, borderRadius: "50%", background: "var(--profile-avatar-bg)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, fontWeight: 700, color: "var(--profile-avatar-text)" }}>{USER.initials}</div>
+              </div>
+              <div style={{ minWidth: 0 }}>
+                <p style={{ fontSize: 15, fontWeight: 700, color: "var(--profile-heading)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 150 }}>{USER.firstName} {USER.lastName}</p>
+                <p style={{ fontSize: 12, color: "var(--profile-meta)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 150 }}>{USER.email}</p>
+              </div>
+            </div>
+            {/* Tier tag */}
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 4, background: "rgba(0,181,102,0.10)", color: "var(--color-surface-raised)", fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: "var(--radius-full)", marginBottom: 10 }}>
+              🌿 {USER.tier}
+            </span>
+            {/* Loyalty mini bar */}
+            <div title={`${500 - USER.points} more points to Silver`}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: "var(--color-surface-raised)" }}>{USER.points} Green Points</span>
+              </div>
+              <div className="loyalty-progress-track" style={{ height: 5 }}>
+                <div className="loyalty-progress-fill" style={{ width: `${(USER.points / 500) * 100}%` }} />
+              </div>
+            </div>
+          </div>
+          <div style={{ height: 1, background: "var(--profile-divider)", margin: "4px 0 8px" }} />
+          {/* Nav items */}
+          <nav role="navigation" aria-label="Account navigation">
+            <ul role="list" style={{ listStyle: "none", padding: 0, margin: 0 }}>
+              {NAV_ITEMS.map(item => (
+                <li key={item.id} role="listitem">
+                  <button
+                    className={`sidebar-nav-item ${activeSection === item.id ? "active" : ""}`}
+                    onClick={() => setActiveSection(item.id)}
+                    aria-current={activeSection === item.id ? "page" : undefined}
+                  >
+                    <span className="nav-icon">{item.icon}</span>
+                    <span style={{ flex: 1 }}>{item.label}</span>
+                    {item.badge !== null && (
+                      <span className="nav-badge" aria-label={`${item.badge} ${item.label.toLowerCase()}`}>{item.badge}</span>
+                    )}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </nav>
+          <div style={{ height: 1, background: "var(--profile-divider)", margin: "8px 0" }} />
+          {/* Sign out */}
+          <button className="sidebar-nav-item" style={{ color: "var(--profile-danger-text)" }} aria-label="Sign out of your account" onClick={() => setShowSignOut(true)}>
+            <span className="nav-icon" style={{ color: "var(--profile-danger-text)" }}>↩</span>
+            <span>Sign Out</span>
+          </button>
+        </aside>
+        {/* Main content */}
+        <main className="profile-main-content" style={{ flex: 1, minWidth: 0, paddingTop: 24 }}>
+          {renderSection()}
+        </main>
+      </div>
+      {/* Mobile bottom tab bar */}
+      <div className="mobile-tab-bar" role="tablist" aria-label="Account navigation">
+        {MOBILE_TABS.map(tab => (
+          <button
+            key={tab.id}
+            className={`mobile-tab-btn ${activeSection === tab.id ? "active" : ""}`}
+            role="tab"
+            aria-selected={activeSection === tab.id}
+            onClick={() => setActiveSection(tab.id)}
+          >
+            <span>{tab.icon}</span>
+            {tab.label}
+          </button>
+        ))}
+      </div>
+      {/* Sign Out Modal */}
+      {showSignOut && (
+        <Modal title="Sign out?" onClose={() => setShowSignOut(false)} maxWidth={400}
+          footer={
+            <>
+              <button className="btn-profile-outline" style={{ flex: 1, justifyContent: "center" }} onClick={() => setShowSignOut(false)}>Cancel</button>
+              <button style={{ flex: 1, justifyContent: "center", background: "var(--profile-danger-text)", color: "#fff", border: "none", borderRadius: "var(--radius-full)", height: 44, fontWeight: 700, fontSize: 15, cursor: "pointer", fontFamily: "Outfit" }} onClick={() => { setShowSignOut(false); addToast("You've been signed out.", "info"); }}>Yes, Sign Out</button>
+            </>
+          }>
+          <p style={{ fontSize: 14, color: "var(--profile-body)", lineHeight: 1.6 }}>You&apos;ll need to sign in again to access your orders, wishlist, and plants.</p>
+        </Modal>
+      )}
+      {/* Toast container */}
+      <div className="toast-container" role="status" aria-live="polite">
+        {toasts.map(toast => (
+          <div key={toast.id} className={`toast-item toast-${toast.type}`}>
+            <span>{toast.type === "success" ? "✓" : toast.type === "error" ? "✕" : "ℹ"}</span>
+            <span>{toast.msg}</span>
+            {toast.onUndo && <button className="toast-undo-btn" onClick={toast.onUndo}>Undo</button>}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
