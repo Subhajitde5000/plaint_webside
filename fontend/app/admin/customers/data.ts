@@ -71,6 +71,27 @@ export interface WishlistItem {
   img: string;
 }
 
+export interface RecentlyViewedItem {
+  id: string;
+  name: string;
+  price: string;
+  date: string;
+  img: string;
+}
+
+export interface SearchEntry {
+  query: string;
+  datetime: string;
+}
+
+export interface CartItem {
+  id: string;
+  name: string;
+  price: string;
+  quantity: number;
+  img: string;
+}
+
 export interface Customer {
   id: string;
   customerId: string;
@@ -118,6 +139,9 @@ export interface Customer {
   addresses: Address[];
   adminNotes: AdminNote[];
   wishlist: WishlistItem[];
+  recentlyViewed: RecentlyViewedItem[];
+  searchHistory: SearchEntry[];
+  cart: CartItem[];
 }
 
 // ─── Mock Data ────────────────────────────────────────────────────────────────
@@ -201,6 +225,28 @@ export const MOCK_CUSTOMERS: Customer[] = [
       { id: "W3", name: "ZZ Plant", price: "₹499", img: "" },
       { id: "W4", name: "Pothos Golden", price: "₹299", img: "" },
     ],
+    recentlyViewed: [
+      { id: "RV1", name: "Monstera Deliciosa", price: "₹1,248", date: "2 hours ago", img: "" },
+      { id: "RV2", name: "Fiddle Leaf Fig", price: "₹899", date: "1 day ago", img: "" },
+      { id: "RV3", name: "Pothos Golden", price: "₹299", date: "3 days ago", img: "" },
+      { id: "RV4", name: "Snake Plant", price: "₹499", date: "5 days ago", img: "" }
+    ],
+    searchHistory: [
+      { query: "how to cure yellow monstera leaves", datetime: "Today, 10:15 AM" },
+      { query: "indoor plant fertilizer India", datetime: "Yesterday, 4:30 PM" },
+      { query: "cat safe plants", datetime: "28 Jun, 11:20 AM" },
+      { query: "best balcony hanging plants", datetime: "25 Jun, 9:15 AM" },
+      { query: "low light bedroom plants", datetime: "20 Jun, 6:40 PM" },
+      { query: "fiddle leaf fig watering", datetime: "15 Jun, 2:10 PM" },
+      { query: "buy monstera online pune", datetime: "12 Jun, 11:00 AM" },
+      { query: "premium soil mix organic", datetime: "10 Jun, 3:45 PM" },
+      { query: "gardening service pune", datetime: "08 Jun, 1:30 PM" },
+      { query: "are peace lilies poisonous to cats", datetime: "05 Jun, 10:25 AM" }
+    ],
+    cart: [
+      { id: "C1", name: "Monstera Deliciosa", price: "₹1,248", quantity: 1, img: "" },
+      { id: "C2", name: "Pothos Golden", price: "₹299", quantity: 2, img: "" }
+    ],
   },
   {
     id: "2",
@@ -262,6 +308,16 @@ export const MOCK_CUSTOMERS: Customer[] = [
     wishlist: [
       { id: "W5", name: "Cactus Collection", price: "₹599", img: "" },
     ],
+    recentlyViewed: [
+      { id: "RV5", name: "Cactus Collection", price: "₹599", date: "1 day ago", img: "" }
+    ],
+    searchHistory: [
+      { query: "how to propagate succulents", datetime: "Yesterday, 3:00 PM" },
+      { query: "best watering pot", datetime: "05 Jun, 11:15 AM" }
+    ],
+    cart: [
+      { id: "C3", name: "Cactus Collection", price: "₹599", quantity: 1, img: "" }
+    ],
   },
   {
     id: "3",
@@ -319,6 +375,9 @@ export const MOCK_CUSTOMERS: Customer[] = [
     ],
     adminNotes: [],
     wishlist: [],
+    recentlyViewed: [],
+    searchHistory: [],
+    cart: [],
   },
   {
     id: "4",
@@ -372,6 +431,9 @@ export const MOCK_CUSTOMERS: Customer[] = [
     ],
     adminNotes: [],
     wishlist: [],
+    recentlyViewed: [],
+    searchHistory: [],
+    cart: [],
   },
   {
     id: "5",
@@ -426,6 +488,9 @@ export const MOCK_CUSTOMERS: Customer[] = [
     ],
     adminNotes: [],
     wishlist: [],
+    recentlyViewed: [],
+    searchHistory: [],
+    cart: [],
   },
   {
     id: "6",
@@ -473,6 +538,9 @@ export const MOCK_CUSTOMERS: Customer[] = [
     addresses: [{ id: "A7", type: "home", isDefault: true, line1: "5 Jubilee Hills", city: "Hyderabad", state: "Telangana", pincode: "500033" }],
     adminNotes: [],
     wishlist: [],
+    recentlyViewed: [],
+    searchHistory: [],
+    cart: [],
   },
   {
     id: "7",
@@ -520,6 +588,9 @@ export const MOCK_CUSTOMERS: Customer[] = [
     addresses: [],
     adminNotes: [{ id: "N2", author: "Admin", authorInitials: "AD", date: "15 Apr 2026", text: "Account blocked due to fraudulent chargeback activity." }],
     wishlist: [],
+    recentlyViewed: [],
+    searchHistory: [],
+    cart: [],
   },
   {
     id: "8",
@@ -567,6 +638,9 @@ export const MOCK_CUSTOMERS: Customer[] = [
     addresses: [{ id: "A8", type: "home", isDefault: true, line1: "33 Park Street", city: "Kolkata", state: "West Bengal", pincode: "700016" }],
     adminNotes: [],
     wishlist: [],
+    recentlyViewed: [],
+    searchHistory: [],
+    cart: [],
   },
 ];
 

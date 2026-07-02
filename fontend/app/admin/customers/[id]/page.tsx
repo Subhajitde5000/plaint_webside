@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { MOCK_CUSTOMERS, Customer, CustomerTier, CustomerStatus, Order, Review, AICareQuery, GardenBooking, ActivityEntry, AdminNote } from "../data";
+import { MOCK_CUSTOMERS, Customer, CustomerTier, CustomerStatus, Order, Review, AICareQuery, GardenBooking, ActivityEntry, AdminNote, RecentlyViewedItem, SearchEntry, CartItem } from "../data";
 
 /* ─── tokens ─────────────────────────────────────────────────────────────── */
 const T = {
@@ -583,29 +583,182 @@ function TabGarden({ c }: { c: Customer }) {
 
 function TabActivity({ c }: { c: Customer }) {
   const typeIcon: Record<string, string> = { order: "🛍", account: "👤", admin: "🔧", system: "⚙️", loyalty: "🏅" };
+
   return (
-    <Card>
-      <CardHeader title="Activity Log" action={
-        <a href={`/admin/activity-log?customer=${c.id}`} style={{ fontSize: 12, color: T.accent, textDecoration: "none" }}>View Full Log ↗</a>
-      } />
-      {c.activityLog.length === 0
-        ? <div style={{ padding: "40px", textAlign: "center", color: T.muted, fontSize: 13 }}>No activity recorded yet.</div>
-        : <div role="log" aria-label="Customer activity log">
-            {c.activityLog.map((e, i) => (
-              <div key={e.id} style={{
-                display: "flex", gap: 12, padding: "12px 18px",
-                borderTop: i > 0 ? `1px solid ${T.borderMuted}` : undefined,
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      {/* ─── Cart Card ─── */}
+      <Card>
+        <CardHeader title={`🛒 Active Shopping Cart (${c.cart?.length || 0} items)`} />
+        {!c.cart || c.cart.length === 0 ? (
+          <div style={{ padding: "30px 18px", textAlign: "center", color: T.muted, fontSize: 13 }}>
+            Shopping cart is currently empty.
+          </div>
+        ) : (
+          <div style={{ padding: "8px 0" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+              <thead>
+                <tr>
+                  {["Product", "Price", "Qty", "Total", "Actions"].map(h => (
+                    <th key={h} style={{ ...thSt, padding: "8px 14px" }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {c.cart.map(item => (
+                  <tr key={item.id} style={{ borderTop: `1px solid ${T.borderMuted}` }}>
+                    <td style={{ ...tdSt, padding: "10px 14px", display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ fontSize: 16 }}>🌿</span>
+                      <span style={{ fontWeight: 600, color: T.text }}>{item.name}</span>
+                    </td>
+                    <td style={{ ...tdSt, padding: "10px 14px", color: T.text }}>{item.price}</td>
+                    <td style={{ ...tdSt, padding: "10px 14px", color: T.muted }}>{item.quantity}</td>
+                    <td style={{ ...tdSt, padding: "10px 14px", fontWeight: 700, color: T.accent }}>
+                      ₹{(parseInt(item.price.replace(/[^\d]/g, "")) * item.quantity).toLocaleString()}
+                    </td>
+                    <td style={{ ...tdSt, padding: "10px 14px" }}>
+                      <button style={{
+                        padding: "3px 8px", borderRadius: 4, background: T.elevated,
+                        border: `1px solid ${T.border}`, color: T.text, fontSize: 11,
+                        cursor: "pointer", marginRight: 6, fontWeight: 600
+                      }}>Move to Wishlist</button>
+                      <button style={{
+                        padding: "3px 8px", borderRadius: 4, background: "transparent",
+                        border: "none", color: T.error, fontSize: 11, cursor: "pointer", fontWeight: 600
+                      }}>Remove</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+
+      {/* ─── Wishlist Card ─── */}
+      <Card>
+        <CardHeader title={`❤️ Detailed Wishlist (${c.wishlist?.length || 0} items)`} />
+        {!c.wishlist || c.wishlist.length === 0 ? (
+          <div style={{ padding: "30px 18px", textAlign: "center", color: T.muted, fontSize: 13 }}>
+            Wishlist is currently empty.
+          </div>
+        ) : (
+          <div style={{ padding: "8px 0" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+              <thead>
+                <tr>
+                  {["Product", "Price", "Actions"].map(h => (
+                    <th key={h} style={{ ...thSt, padding: "8px 14px" }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {c.wishlist.map(item => (
+                  <tr key={item.id} style={{ borderTop: `1px solid ${T.borderMuted}` }}>
+                    <td style={{ ...tdSt, padding: "10px 14px", display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ fontSize: 16 }}>🌿</span>
+                      <span style={{ fontWeight: 600, color: T.text }}>{item.name}</span>
+                    </td>
+                    <td style={{ ...tdSt, padding: "10px 14px", color: T.accent, fontWeight: 700 }}>{item.price}</td>
+                    <td style={{ ...tdSt, padding: "10px 14px" }}>
+                      <button style={{
+                        padding: "3px 8px", borderRadius: 4, background: T.accentBg,
+                        border: `1px solid ${T.accent}`, color: T.accent, fontSize: 11,
+                        cursor: "pointer", marginRight: 6, fontWeight: 600
+                      }}>Add to Cart</button>
+                      <button style={{
+                        padding: "3px 8px", borderRadius: 4, background: "transparent",
+                        border: "none", color: T.error, fontSize: 11, cursor: "pointer", fontWeight: 600
+                      }}>Remove</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+
+      {/* ─── Recently Viewed Products ─── */}
+      <Card>
+        <CardHeader title={`👁️ Recently Viewed Products (${c.recentlyViewed?.length || 0})`} />
+        {!c.recentlyViewed || c.recentlyViewed.length === 0 ? (
+          <div style={{ padding: "30px 18px", textAlign: "center", color: T.muted, fontSize: 13 }}>
+            No recently viewed products.
+          </div>
+        ) : (
+          <div style={{ padding: "8px 0" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+              <thead>
+                <tr>
+                  {["Product", "Price", "Viewed At"].map(h => (
+                    <th key={h} style={{ ...thSt, padding: "8px 14px" }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {c.recentlyViewed.map(item => (
+                  <tr key={item.id} style={{ borderTop: `1px solid ${T.borderMuted}` }}>
+                    <td style={{ ...tdSt, padding: "10px 14px", display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ fontSize: 16 }}>🌿</span>
+                      <span style={{ fontWeight: 600, color: T.text }}>{item.name}</span>
+                    </td>
+                    <td style={{ ...tdSt, padding: "10px 14px", color: T.text }}>{item.price}</td>
+                    <td style={{ ...tdSt, padding: "10px 14px", color: T.muted }}>{item.date}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+
+      {/* ─── Search History ─── */}
+      <Card>
+        <CardHeader title={`🔍 Search History (Last 10–20 searches)`} />
+        {!c.searchHistory || c.searchHistory.length === 0 ? (
+          <div style={{ padding: "30px 18px", textAlign: "center", color: T.muted, fontSize: 13 }}>
+            No search history found.
+          </div>
+        ) : (
+          <div style={{ padding: "16px 18px", display: "flex", flexDirection: "column", gap: 8 }}>
+            {c.searchHistory.map((sh, idx) => (
+              <div key={idx} style={{
+                display: "flex", justifyContent: "space-between", alignItems: "center",
+                padding: "8px 12px", background: T.elevated, borderRadius: 6,
+                border: `1px solid ${T.borderMuted}`
               }}>
-                <span style={{ fontSize: 16, flexShrink: 0, marginTop: 1 }}>{typeIcon[e.type] || "•"}</span>
-                <div>
-                  <div style={{ fontSize: 13, color: T.text }}>{e.action}</div>
-                  <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>{e.datetime} · {e.actor}</div>
-                </div>
+                <span style={{ fontSize: 13, color: T.text, fontWeight: 500 }}>"{sh.query}"</span>
+                <span style={{ fontSize: 11, color: T.muted }}>{sh.datetime}</span>
               </div>
             ))}
           </div>
-      }
-    </Card>
+        )}
+      </Card>
+
+      {/* ─── Activity Log ─── */}
+      <Card>
+        <CardHeader title="Activity Log" action={
+          <a href={`/admin/activity-log?customer=${c.id}`} style={{ fontSize: 12, color: T.accent, textDecoration: "none" }}>View Full Log ↗</a>
+        } />
+        {c.activityLog.length === 0
+          ? <div style={{ padding: "40px", textAlign: "center", color: T.muted, fontSize: 13 }}>No activity recorded yet.</div>
+          : <div role="log" aria-label="Customer activity log">
+              {c.activityLog.map((e, i) => (
+                <div key={e.id} style={{
+                  display: "flex", gap: 12, padding: "12px 18px",
+                  borderTop: i > 0 ? `1px solid ${T.borderMuted}` : undefined,
+                }}>
+                  <span style={{ fontSize: 16, flexShrink: 0, marginTop: 1 }}>{typeIcon[e.type] || "•"}</span>
+                  <div>
+                    <div style={{ fontSize: 13, color: T.text }}>{e.action}</div>
+                    <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>{e.datetime} · {e.actor}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+        }
+      </Card>
+    </div>
   );
 }
 
