@@ -3,3 +3,5 @@ venv
 .env
 .env.example
 plant_database.sql
+backend_file_stacher.txt
+test.ipynb
