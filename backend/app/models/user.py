@@ -1,37 +1,41 @@
 from sqlalchemy import (
-    Column,BigInteger, String, Boolean,DateTime, Date,
-      Enum, Text, ForeignKey, Index
+    Column, BigInteger, String, Boolean, DateTime, Date,
+    Enum, Text, ForeignKey, Index
 )
 from sqlalchemy.orm import relationship
-from sqlalchemy.sql import column, func
+from sqlalchemy.sql import func
 from app.database import Base
+
 
 class User(Base):
     __tablename__ = "users"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     uuid = Column(String(36), unique=True, nullable=False)
-    first_name = Column(String(50), nullable=False)
-    last_name = Column(String(50), nullable=False)
-    email = Column(String(100), unique=True, nullable=False)
-    phone_number = Column(String(20), unique=True, nullable=True)
-    password_hash = Column(String(255), nullable=False)
-    preferred_language = Column(String(10), default='en')
-    currency = Column(String(10), default='INR')
+    first_name = Column(String(100), nullable=False)
+    last_name = Column(String(100), nullable=False)
+    email = Column(String(254), unique=True, nullable=False)
+    phone = Column(String(15))
+    password_hash = Column(String(255))  # NULL for social login
+    dob = Column(Date)
+    gender = Column(Enum("M", "F", "NB", "PNTS"))
+    about_me = Column(String(240))
+    avatar_url = Column(String(500))
+    preferred_lang = Column(String(10), default="en")
+    currency = Column(String(3), default="INR")
     email_verified = Column(Boolean, default=False)
     phone_verified = Column(Boolean, default=False)
     is_active = Column(Boolean, default=True)
     is_blocked = Column(Boolean, default=False)
-    block_reason = Column(String(255), nullable=True)
-    block_at = Column(DateTime)
+    blocked_reason = Column(String(500))
+    blocked_at = Column(DateTime)
     last_login_at = Column(DateTime)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
-    deleted_at = Column(DateTime)
-
+    deleted_at = Column(DateTime)  # soft delete
 
     # Relationships
-    social_accounts = relationship("UserSocialAccount", back_populates="user")
+    social_accounts = relationship("UserSocialAccount", back_populates="user", cascade="all, delete-orphan")
     verification_tokens = relationship("VerificationToken", back_populates="user", cascade="all, delete-orphan")
     refresh_tokens = relationship("RefreshToken", back_populates="user", cascade="all, delete-orphan")
     addresses = relationship("Address", back_populates="user", cascade="all, delete-orphan")
@@ -53,6 +57,7 @@ class User(Base):
         Index("idx_created_at", "created_at"),
         Index("idx_is_active", "is_active"),
     )
+
 
 class UserSocialAccount(Base):
     __tablename__ = "user_social_accounts"

@@ -1,11 +1,11 @@
-from typing import TypeVar, Generic, List, Type
+from typing import TypeVar, Generic, List, Any
 from pydantic import BaseModel
 from sqlalchemy.orm import Query
 
 T = TypeVar("T")
 
-class PaginatedResponse(BaseModel, Generic[T]):
-    items: List[T]
+
+class PaginatedResponse(BaseModel):
     total: int
     page: int
     page_size: int
@@ -13,10 +13,12 @@ class PaginatedResponse(BaseModel, Generic[T]):
     has_next: bool
     has_prev: bool
 
-def paginate(query: Query, page: int, page_size: int):
+
+def paginate(query: Query, page: int, page_size: int) -> dict:
+    """Execute paginated SQLAlchemy query and return pagination metadata."""
     total = query.count()
     items = query.offset((page - 1) * page_size).limit(page_size).all()
-    pages = (total + page_size - 1) // page_size
+    pages = max(1, (total + page_size - 1) // page_size)
     return {
         "items": items,
         "total": total,

@@ -2,25 +2,38 @@ from sqlalchemy.orm import Session
 from app.models.loyalty import LoyaltyAccount, LoyaltyTransaction
 from app.models.order import Order
 
-POINTS_PER_RUPEE = 1          # 1 point per ₹1 spent
-POINTS_TO_RUPEE  = 0.10       # 1 point = ₹0.10
-SILVER_THRESHOLD = 500        # lifetime points
-GOLD_THRESHOLD   = 2000
+POINTS_PER_RUPEE = 1        # 1 point per ₹1 spent
+POINTS_TO_RUPEE = 0.10      # 1 point = ₹0.10 discount
+SILVER_THRESHOLD = 500      # lifetime points to reach Silver
+GOLD_THRESHOLD = 2000       # lifetime points to reach Gold
+
 
 class LoyaltyService:
     def __init__(self, db: Session):
         self.db = db
 
+    def get_or_create_account(self, user_id: int) -> LoyaltyAccount:
+        account = self.db.query(LoyaltyAccount).filter(
+            LoyaltyAccount.user_id == user_id
+        ).first()
+        if not account:
+            account = LoyaltyAccount(user_id=user_id)
+            self.db.add(account)
+            self.db.flush()
+        return account
+
     def earn_points(self, user_id: int, order: Order) -> int:
-        points_earned = int(order.total * POINTS_PER_RUPEE)
+        points_earned = int(float(order.total) * POINTS_PER_RUPEE)
         account = self.db.query(LoyaltyAccount).filter(
             LoyaltyAccount.user_id == user_id
         ).with_for_update().first()
+        if not account:
+            return 0
 
         account.points_balance += points_earned
         account.lifetime_points += points_earned
 
-        # Tier upgrade check
+        # Tier upgrade
         if account.lifetime_points >= GOLD_THRESHOLD and account.tier != "gold":
             account.tier = "gold"
         elif account.lifetime_points >= SILVER_THRESHOLD and account.tier == "plant_lover":
@@ -34,7 +47,6 @@ class LoyaltyService:
             description=f"Earned for order {order.order_number}",
             order_id=order.id,
         ))
-        self.db.commit()
         return points_earned
 
     def redeem_points(self, user_id: int, points: int, order: Order) -> float:
@@ -42,7 +54,7 @@ class LoyaltyService:
             LoyaltyAccount.user_id == user_id
         ).with_for_update().first()
 
-        if account.points_balance < points:
+        if not account or account.points_balance < points:
             raise ValueError("Insufficient loyalty points.")
 
         discount = round(points * POINTS_TO_RUPEE, 2)
@@ -61,13 +73,15 @@ class LoyaltyService:
     def adjust_points(
         self, user_id: int, points: int, reason: str, admin_id: int
     ) -> None:
-        """Admin-initiated adjustment (can be positive or negative)."""
+        """Admin-initiated manual adjustment (positive or negative)."""
         account = self.db.query(LoyaltyAccount).filter(
             LoyaltyAccount.user_id == user_id
         ).with_for_update().first()
+        if not account:
+            raise ValueError("Loyalty account not found.")
 
         if points < 0 and account.points_balance + points < 0:
-            raise ValueError("Adjustment would result in negative balance.")
+            raise ValueError("Adjustment would result in a negative balance.")
 
         account.points_balance += points
         if points > 0:

@@ -1,91 +1,66 @@
-# app/api/v1/admin/orders.py
-from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
-from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import and_, or_
-from typing import Optional, List
+from datetime import datetime, timezone
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.orm import Session
+from typing import Optional
 
 from app.database import get_db
-from app.dependencies import require_support_or_above, require_ops_or_above
+from app.dependencies import require_ops_or_above, require_support_or_above, get_current_admin
 from app.models.order import Order, OrderStatusHistory, OrderNote, Refund
 from app.models.admin import AdminUser
 from app.schemas.order import (
-    AdminOrderListResponse, AdminOrderDetailResponse,
-    UpdateFulfillmentRequest, AdminOrderNoteRequest
+    UpdateFulfillmentRequest, AdminOrderNoteRequest, CancelOrderRequest, RefundRequest
 )
-from app.services.shipping_service import ShippingService
-from app.tasks.order_tasks import send_fulfillment_notification
+from app.utils.pagination import paginate
+from app.services.payment_service import PaymentService
+from app.tasks.order_tasks import (
+    release_inventory_on_cancel, send_fulfillment_notification
+)
 
 router = APIRouter(prefix="/admin/orders", tags=["Admin - Orders"])
 
 
-@router.get("/", response_model=AdminOrderListResponse)
+@router.get("/")
 async def list_orders(
     db: Session = Depends(get_db),
     admin: AdminUser = Depends(require_support_or_above),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(25, ge=1, le=100),
     status: Optional[str] = None,
     payment_status: Optional[str] = None,
-    fulfillment_status: Optional[str] = None,
-    date_from: Optional[str] = None,
-    date_to: Optional[str] = None,
-    city: Optional[str] = None,
-    tag: Optional[str] = None,
-    q: Optional[str] = None,
-    sort: str = Query(default="newest", enum=["newest","oldest","highest","lowest"]),
-    page: int = Query(default=1, ge=1),
-    page_size: int = Query(default=25, ge=1, le=250),
+    search: Optional[str] = None,
 ):
     query = db.query(Order)
-
     if status:
         query = query.filter(Order.status == status)
     if payment_status:
         query = query.filter(Order.payment_status == payment_status)
-    if q:
-        query = query.filter(
-            or_(
-                Order.order_number.ilike(f"%{q}%"),
-                Order.guest_email.ilike(f"%{q}%"),
-                Order.tracking_number.ilike(f"%{q}%"),
-            )
-        )
-    if date_from:
-        query = query.filter(Order.created_at >= date_from)
-    if date_to:
-        query = query.filter(Order.created_at <= date_to)
-
-    sort_map = {
-        "newest": Order.created_at.desc(),
-        "oldest": Order.created_at.asc(),
-        "highest": Order.total.desc(),
-        "lowest": Order.total.asc(),
-    }
-    query = query.order_by(sort_map[sort])
-
-    total = query.count()
-    orders = query.options(
-        joinedload(Order.user),
-        joinedload(Order.items),
-    ).offset((page - 1) * page_size).limit(page_size).all()
-
-    return AdminOrderListResponse(
-        items=orders, total=total, page=page, page_size=page_size
-    )
+    if search:
+        query = query.filter(Order.order_number.ilike(f"%{search}%"))
+    query = query.order_by(Order.created_at.desc())
+    result = paginate(query, page, page_size)
+    result["items"] = [
+        {
+            "uuid": o.uuid,
+            "order_number": o.order_number,
+            "total": str(o.total),
+            "status": o.status,
+            "payment_status": o.payment_status,
+            "fulfillment_status": o.fulfillment_status,
+            "created_at": o.created_at.isoformat(),
+            "items_count": len(o.items),
+        }
+        for o in result["items"]
+    ]
+    return result
 
 
-@router.get("/{order_uuid}", response_model=AdminOrderDetailResponse)
-async def get_order_detail(
+@router.get("/{order_uuid}")
+async def get_order(
     order_uuid: str,
     db: Session = Depends(get_db),
     admin: AdminUser = Depends(require_support_or_above),
 ):
-    order = db.query(Order).options(
-        joinedload(Order.user),
-        joinedload(Order.items),
-        joinedload(Order.status_history),
-        joinedload(Order.notes),
-        joinedload(Order.shipping_address),
-    ).filter(Order.uuid == order_uuid).first()
-
+    order = db.query(Order).filter(Order.uuid == order_uuid).first()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found.")
     return order
@@ -95,7 +70,6 @@ async def get_order_detail(
 async def fulfill_order(
     order_uuid: str,
     payload: UpdateFulfillmentRequest,
-    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     admin: AdminUser = Depends(require_ops_or_above),
 ):
@@ -103,73 +77,88 @@ async def fulfill_order(
     if not order:
         raise HTTPException(status_code=404, detail="Order not found.")
 
-    if order.fulfillment_status == "fulfilled":
-        raise HTTPException(status_code=400, detail="Order is already fulfilled.")
-
-    order.fulfillment_status = "fulfilled"
-    order.status = "dispatched"
     order.shipping_carrier = payload.carrier
     order.tracking_number = payload.tracking_number
     order.tracking_url = payload.tracking_url
-
+    order.status = "dispatched"
+    order.fulfillment_status = "fulfilled"
     db.add(OrderStatusHistory(
         order_id=order.id,
-        admin_id=admin.id,
         status="dispatched",
-        description=f"Marked as fulfilled. Tracking: {payload.tracking_number}"
+        description=f"Dispatched via {payload.carrier}. AWB: {payload.tracking_number}",
+        admin_id=admin.id,
     ))
-
-    # Release inventory reservations, deduct actual stock
-    from app.tasks.order_tasks import deduct_inventory_on_fulfillment
-    background_tasks.add_task(
-        deduct_inventory_on_fulfillment.delay, order.id
-    )
+    db.commit()
 
     if payload.notify_customer:
-        background_tasks.add_task(
-            send_fulfillment_notification.delay, order.id
-        )
+        send_fulfillment_notification.delay(order.id)
 
-    db.commit()
-    return {"message": "Order fulfilled.", "tracking": payload.tracking_number}
+    return {"message": "Order fulfilled and customer notified."}
 
 
 @router.post("/{order_uuid}/cancel")
-async def cancel_order(
+async def admin_cancel_order(
     order_uuid: str,
-    payload: dict,
+    payload: CancelOrderRequest,
     db: Session = Depends(get_db),
     admin: AdminUser = Depends(require_ops_or_above),
 ):
     order = db.query(Order).filter(Order.uuid == order_uuid).first()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found.")
-
-    cancellable = {"order_placed", "payment_confirmed", "processing", "packed"}
-    if order.status not in cancellable:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Cannot cancel an order in '{order.status}' status."
-        )
+    if order.status in ("delivered", "cancelled"):
+        raise HTTPException(status_code=400, detail=f"Cannot cancel order in '{order.status}' state.")
 
     order.status = "cancelled"
     order.cancelled_at = datetime.now(timezone.utc)
-    order.cancel_reason = payload.get("reason")
+    order.cancel_reason = payload.reason
     order.cancelled_by = "admin"
-
     db.add(OrderStatusHistory(
         order_id=order.id,
-        admin_id=admin.id,
         status="cancelled",
-        description=f"Cancelled by admin. Reason: {payload.get('reason')}"
+        description=f"Admin cancelled: {payload.reason}",
+        admin_id=admin.id,
     ))
-
-    # Release reserved inventory
-    from app.tasks.order_tasks import release_inventory_on_cancel
-    release_inventory_on_cancel.delay(order.id)
-
     db.commit()
+    release_inventory_on_cancel.delay(order.id)
     return {"message": "Order cancelled."}
+
+
+@router.post("/{order_uuid}/refund")
+async def create_refund(
+    order_uuid: str,
+    payload: RefundRequest,
+    db: Session = Depends(get_db),
+    admin: AdminUser = Depends(require_ops_or_above),
+):
+    order = db.query(Order).filter(Order.uuid == order_uuid).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found.")
+    if not order.razorpay_payment_id:
+        raise HTTPException(status_code=400, detail="No payment ID found for this order.")
+
+    payment_svc = PaymentService()
+    try:
+        rp_refund = payment_svc.create_refund(
+            payment_id=order.razorpay_payment_id,
+            amount_paise=int(float(payload.amount) * 100),
+            notes={"order_number": order.order_number, "reason": payload.reason or ""},
+        )
+        gateway_refund_id = rp_refund.get("id")
+    except Exception:
+        gateway_refund_id = None
+
+    db.add(Refund(
+        order_id=order.id,
+        admin_id=admin.id,
+        amount=payload.amount,
+        reason=payload.reason,
+        type=payload.type,
+        gateway_refund_id=gateway_refund_id,
+        status="processed" if gateway_refund_id else "pending",
+    ))
+    db.commit()
+    return {"message": "Refund initiated.", "gateway_refund_id": gateway_refund_id}
 
 
 @router.post("/{order_uuid}/notes")
@@ -182,7 +171,6 @@ async def add_order_note(
     order = db.query(Order).filter(Order.uuid == order_uuid).first()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found.")
-
     note = OrderNote(
         order_id=order.id,
         admin_id=admin.id,

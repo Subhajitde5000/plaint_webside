@@ -1,12 +1,15 @@
-from fastapi import APIRouter, Request, HTTPException, BackgroundTasks
+import hmac
+import hashlib
+import json
+from fastapi import APIRouter, Request, HTTPException, Depends, BackgroundTasks
 from sqlalchemy.orm import Session
-import hmac, hashlib, json
+
 from app.database import get_db
 from app.config import settings
 from app.models.order import Order, OrderStatusHistory
-from fastapi import Depends
 
 router = APIRouter(prefix="/webhooks/razorpay", tags=["Webhooks"])
+
 
 @router.post("/")
 async def razorpay_webhook(
@@ -17,11 +20,11 @@ async def razorpay_webhook(
     body = await request.body()
     signature = request.headers.get("X-Razorpay-Signature", "")
 
-    # Verify webhook signature
+    # HMAC-SHA256 signature verification
     expected = hmac.new(
         settings.RAZORPAY_WEBHOOK_SECRET.encode(),
         body,
-        hashlib.sha256
+        hashlib.sha256,
     ).hexdigest()
 
     if not hmac.compare_digest(expected, signature):
@@ -32,10 +35,10 @@ async def razorpay_webhook(
 
     if event == "payment.captured":
         payment = payload["payload"]["payment"]["entity"]
-        order_id = payment.get("order_id")
+        rp_order_id = payment.get("order_id")
 
         order = db.query(Order).filter(
-            Order.razorpay_order_id == order_id
+            Order.razorpay_order_id == rp_order_id
         ).first()
 
         if order and order.payment_status != "paid":
@@ -45,12 +48,27 @@ async def razorpay_webhook(
             db.add(OrderStatusHistory(
                 order_id=order.id,
                 status="payment_confirmed",
-                description="Payment captured via Razorpay webhook"
+                description="Payment captured via Razorpay webhook",
             ))
             db.commit()
 
             from app.tasks.order_tasks import post_payment_tasks
             background_tasks.add_task(post_payment_tasks.delay, order.id)
+
+    elif event == "payment.failed":
+        payment = payload["payload"]["payment"]["entity"]
+        rp_order_id = payment.get("order_id")
+        order = db.query(Order).filter(
+            Order.razorpay_order_id == rp_order_id
+        ).first()
+        if order:
+            order.payment_status = "failed"
+            db.add(OrderStatusHistory(
+                order_id=order.id,
+                status="payment_failed",
+                description=f"Payment failed: {payment.get('error_description', '')}",
+            ))
+            db.commit()
 
     elif event == "refund.created":
         refund_data = payload["payload"]["refund"]["entity"]
@@ -61,7 +79,7 @@ async def razorpay_webhook(
             from app.models.order import Refund
             refund = db.query(Refund).filter(
                 Refund.order_id == order.id,
-                Refund.status == "pending"
+                Refund.status == "pending",
             ).first()
             if refund:
                 refund.status = "processed"

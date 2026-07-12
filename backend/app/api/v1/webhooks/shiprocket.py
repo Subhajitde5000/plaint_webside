@@ -1,5 +1,7 @@
 from fastapi import APIRouter, Request, Depends
 from sqlalchemy.orm import Session
+from datetime import datetime, timezone
+
 from app.database import get_db
 from app.models.order import Order, OrderStatusHistory
 
@@ -17,6 +19,7 @@ STATUS_MAP = {
     "RTO INITIATED": "return_in_transit",
     "RTO DELIVERED": "return_received",
 }
+
 
 @router.post("/")
 async def shiprocket_webhook(
@@ -38,9 +41,10 @@ async def shiprocket_webhook(
     new_status = STATUS_MAP.get(sr_status.upper())
     if new_status and order.status != new_status:
         order.status = new_status
+
         if new_status == "delivered":
-            from datetime import datetime, timezone
             order.delivered_at = datetime.now(timezone.utc)
+            order.fulfillment_status = "fulfilled"
 
         db.add(OrderStatusHistory(
             order_id=order.id,
