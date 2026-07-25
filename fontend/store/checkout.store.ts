@@ -22,10 +22,14 @@ interface CheckoutState {
   buyNowItem: BuyNowItem | null;
   discountCode: string | null;
   discountMeta: DiscountMeta | null;
+  loyaltyPointsToUse: number;
+  loyaltyDiscountAmount: number;
   setBuyNowItem: (item: BuyNowItem) => void;
   clearBuyNowItem: () => void;
   setDiscountCode: (code: string | null) => void;
   setDiscountMeta: (meta: DiscountMeta | null) => void;
+  setLoyaltyPointsToUse: (pts: number, discount?: number) => void;
+  clearLoyaltyPoints: () => void;
 }
 
 const BUY_NOW_KEY = "plant_byst_buy_now_item";
@@ -56,6 +60,8 @@ export const useCheckoutStore = create<CheckoutState>((set) => ({
   buyNowItem: ssGet<BuyNowItem>(BUY_NOW_KEY),
   discountCode: ssGet<string>(DISCOUNT_CODE_KEY),
   discountMeta: ssGet<DiscountMeta>(DISCOUNT_META_KEY),
+  loyaltyPointsToUse: 0,
+  loyaltyDiscountAmount: 0,
 
   setBuyNowItem: (item) => {
     ssSet(BUY_NOW_KEY, item);
@@ -75,4 +81,11 @@ export const useCheckoutStore = create<CheckoutState>((set) => ({
     else ssDel(DISCOUNT_META_KEY);
     set({ discountMeta: meta });
   },
+  setLoyaltyPointsToUse: (pts: number, discount: number = 0) => {
+    set({ loyaltyPointsToUse: pts, loyaltyDiscountAmount: discount });
+  },
+  clearLoyaltyPoints: () => {
+    set({ loyaltyPointsToUse: 0, loyaltyDiscountAmount: 0 });
+  },
 }));
+

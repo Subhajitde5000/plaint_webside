@@ -54,9 +54,14 @@ export interface CreateAddressPayload {
 
 export interface LoyaltyData {
   points_balance: number;
+  points_reserved?: number;
+  available_points?: number;
   tier: string;
   lifetime_points: number;
   tier_updated_at?: string | null;
+  point_value_inr?: number;
+  min_redeem_points?: number;
+  max_subtotal_percent?: number;
   recent_transactions: Array<{
     type: string;
     points: number;
@@ -64,6 +69,7 @@ export interface LoyaltyData {
     created_at: string;
   }>;
 }
+
 
 export interface WishlistItem {
   id: number;

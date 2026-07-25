@@ -22,8 +22,10 @@ export function useLoyalty() {
   const query = useQuery<LoyaltyData>({
     queryKey: LOYALTY_QUERY_KEY,
     queryFn: getLoyaltyApi,
-    staleTime: 1000 * 60 * 5,
+    staleTime: 1000 * 10,
+    refetchOnWindowFocus: true,
   });
+
 
   const tier = query.data?.tier ?? "plant_lover";
 

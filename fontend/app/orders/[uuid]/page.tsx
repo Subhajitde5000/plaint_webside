@@ -653,10 +653,10 @@ export default function OrderDetailPage() {
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 {[
                   { label: "Subtotal", value: order.subtotal },
-                  { label: "Discount", value: `-${formatPrice(order.discount_amount)}`, color: T.green },
+                  { label: "Coupon Discount", value: parseFloat(order.discount_amount) > 0 ? `-${formatPrice(order.discount_amount)}` : null, color: T.green },
                   { label: "Shipping", value: parseFloat(order.shipping_amount) === 0 ? "Free" : formatPrice(order.shipping_amount), color: parseFloat(order.shipping_amount) === 0 ? T.green : undefined },
                   { label: "Tax", value: order.tax_amount },
-                ].map(({ label, value, color }) => (
+                ].filter(r => r.value !== null).map(({ label, value, color }) => (
                   <div key={label} style={{ display: "flex", justifyContent: "space-between", fontSize: 14, color: T.body }}>
                     <span style={{ color: T.muted }}>{label}</span>
                     <span style={{ color: color ?? T.body }}>
@@ -664,6 +664,22 @@ export default function OrderDetailPage() {
                     </span>
                   </div>
                 ))}
+                {order.loyalty_points_used > 0 && (
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14 }}>
+                    <span style={{ color: T.muted, display: "flex", alignItems: "center", gap: 4 }}>
+                      🟢 Green Points
+                      <span style={{
+                        background: T.greenPale, color: T.green, padding: "1px 7px",
+                        borderRadius: 6, fontWeight: 700, fontSize: 11, marginLeft: 4,
+                      }}>
+                        {order.loyalty_points_used} pts
+                      </span>
+                    </span>
+                    <span style={{ color: T.green, fontWeight: 700 }}>
+                      -{formatPrice(order.loyalty_discount_amount)}
+                    </span>
+                  </div>
+                )}
                 {order.discount_code && (
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
                     <span style={{ color: T.muted }}>Coupon</span>

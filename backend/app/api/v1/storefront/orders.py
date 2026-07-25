@@ -12,6 +12,7 @@ from app.schemas.order import (
 )
 from app.services.order_service import OrderService
 from app.services.payment_service import PaymentService
+from app.services.loyalty_service import LoyaltyService
 from app.tasks.order_tasks import post_payment_tasks, send_cancellation_notification
 from app.utils.pagination import paginate
 from datetime import datetime, timezone
@@ -79,12 +80,20 @@ async def create_order(
     if dev_mode:
         order.payment_status = "paid"
         order.status = "payment_verified"
+        # Immediately confirm redeemed loyalty points so balance is updated at once
+        if order.loyalty_points_used:
+            LoyaltyService(db).confirm_redeemed_points(user.id, order.loyalty_points_used, order)
         db.add(OrderStatusHistory(
             order_id=order.id,
             status="payment_verified",
             description="Auto-confirmed (dev mode – no payment gateway)",
         ))
         db.commit()
+        # Also dispatch post_payment_tasks for confirmation email (idempotency safe)
+        try:
+            post_payment_tasks.delay(order.id)
+        except Exception:
+            pass
 
     return {
         "order_uuid": order.uuid,
@@ -120,6 +129,10 @@ async def verify_payment(
     order.status = "payment_verified"
     order.razorpay_payment_id = payload.razorpay_payment_id
     order.razorpay_signature = payload.razorpay_signature
+
+    if order.loyalty_points_used:
+        LoyaltyService(db).confirm_redeemed_points(user.id, order.loyalty_points_used, order)
+
     db.add(OrderStatusHistory(
         order_id=order.id,
         status="payment_verified",
@@ -315,12 +328,61 @@ async def cancel_order(
             description="Refund completed" if gateway_refund_id else "Refund processing after customer cancellation",
         ))
 
+    if order.loyalty_points_used and order.loyalty_points_used > 0:
+        loyalty_svc = LoyaltyService(db)
+        if order.payment_status in {"paid", "partially_paid"}:
+            loyalty_svc.restore_points_on_refund(order, float(order.total), is_full_refund=True)
+        else:
+            loyalty_svc.release_reserved_points(user.id, order.loyalty_points_used)
+
     db.commit()
     try:
         send_cancellation_notification.delay(order.id)
     except Exception:
         pass
     return {"message": "Order cancelled successfully."}
+
+
+@router.post("/validate-loyalty")
+async def validate_loyalty_points(
+    payload: dict,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    points = int(payload.get("points", 0))
+    subtotal = float(payload.get("subtotal", 0.0))
+    coupon_code = payload.get("discount_code") or payload.get("coupon_code")
+    coupon_discount_amount = float(payload.get("coupon_discount_amount", 0.0))
+
+    d_type = None
+    d_val = None
+    if coupon_code:
+        from app.models.discount import Discount
+        disc = db.query(Discount).filter(Discount.code == str(coupon_code).upper()).first()
+        if disc:
+            d_type = disc.discount_type
+            d_val = float(disc.value or 0)
+
+    svc = LoyaltyService(db)
+    is_valid, msg, discount = svc.validate_redemption(
+        user_id=user.id,
+        points=points,
+        subtotal=subtotal,
+        coupon_discount_amount=coupon_discount_amount,
+        discount_type=d_type,
+        discount_value=d_val,
+        discount_code=coupon_code,
+    )
+    account = svc.get_or_create_account(user.id)
+    return {
+        "is_valid": is_valid,
+        "message": msg,
+        "discount_amount": discount,
+        "points_balance": account.points_balance,
+        "points_reserved": account.points_reserved,
+        "available_points": account.available_points,
+    }
+
 
 
 @router.post("/{order_uuid}/return")

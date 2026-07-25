@@ -94,12 +94,15 @@ export function useCheckout() {
     },
 
     onSuccess: (data) => {
-      // Clear temporary Buy Now item and cart cache
+      // Clear temporary Buy Now item, checkout loyalty state, and invalidate query caches
       useCheckoutStore.getState().clearBuyNowItem();
+      useCheckoutStore.getState().clearLoyaltyPoints();
       qc.invalidateQueries({ queryKey: ["cart"] });
       qc.invalidateQueries({ queryKey: ["orders"] });
+      qc.invalidateQueries({ queryKey: ["loyalty"] });
       router.push(`/orders/${data.order_uuid}/success`);
     },
+
   });
 
   return {

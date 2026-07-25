@@ -107,17 +107,21 @@ async def delete_address(
 # ── Loyalty ────────────────────────────────────────────────────────────
 @router.get("/me/loyalty")
 async def get_loyalty(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    account = db.query(LoyaltyAccount).filter(LoyaltyAccount.user_id == user.id).first()
-    if not account:
-        return {"points_balance": 0, "tier": "plant_lover", "lifetime_points": 0}
+    from app.services.loyalty_service import LoyaltyService, MIN_REDEEM_POINTS, MAX_REDEEM_PERCENT, POINTS_TO_RUPEE
+    account = LoyaltyService(db).get_or_create_account(user.id)
     transactions = db.query(LoyaltyTransaction).filter(
         LoyaltyTransaction.user_id == user.id
     ).order_by(LoyaltyTransaction.created_at.desc()).limit(10).all()
     return {
         "points_balance": account.points_balance,
+        "points_reserved": account.points_reserved or 0,
+        "available_points": account.available_points,
         "tier": account.tier,
         "lifetime_points": account.lifetime_points,
         "tier_updated_at": account.tier_updated_at,
+        "point_value_inr": POINTS_TO_RUPEE,
+        "min_redeem_points": MIN_REDEEM_POINTS,
+        "max_subtotal_percent": MAX_REDEEM_PERCENT,
         "recent_transactions": [
             {"type": t.type, "points": t.points, "description": t.description, "created_at": t.created_at}
             for t in transactions

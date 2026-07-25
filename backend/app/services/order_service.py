@@ -16,6 +16,7 @@ from app.models.loyalty import LoyaltyAccount
 from app.schemas.order import CreateOrderRequest
 from app.models.user import User
 from app.services.discount_service import DiscountService
+from app.services.loyalty_service import LoyaltyService
 
 
 class OrderService:
@@ -101,13 +102,28 @@ class OrderService:
         loyalty_discount = 0.00
         loyalty_points_used = 0
         if payload.loyalty_points_to_use and payload.loyalty_points_to_use > 0:
-            account = db.query(LoyaltyAccount).filter(
-                LoyaltyAccount.user_id == user.id
-            ).first()
-            if account:
-                points = min(payload.loyalty_points_to_use, account.points_balance)
-                loyalty_discount = round(points * 0.10, 2)   # 1 pt = ₹0.10
-                loyalty_points_used = points
+            loyalty_svc = LoyaltyService(db)
+            d_type = discount_result.discount.discount_type if (discount_result and discount_result.discount) else None
+            d_val = float(discount_result.discount.value or 0) if (discount_result and discount_result.discount and discount_result.discount.value) else None
+            d_code = discount_code
+
+            is_valid, msg, discount = loyalty_svc.validate_redemption(
+                user_id=user.id,
+                points=payload.loyalty_points_to_use,
+                subtotal=subtotal,
+                coupon_discount_amount=discount_amount,
+                discount_type=d_type,
+                discount_value=d_val,
+                discount_code=d_code,
+            )
+            if not is_valid:
+                raise ValueError(msg)
+
+            # Reserve points (Reserve, don't deduct yet!)
+            loyalty_svc.reserve_points(user.id, payload.loyalty_points_to_use)
+            loyalty_discount = discount
+            loyalty_points_used = payload.loyalty_points_to_use
+
 
         # 5. Shipping & Tax
         taxable = subtotal - discount_amount - loyalty_discount
@@ -143,7 +159,11 @@ class OrderService:
         db.add(order)
         db.flush()  # get order.id
 
+        if loyalty_points_used > 0:
+            loyalty_svc.confirm_redeemed_points(user.id, loyalty_points_used, order)
+
         if discount_result and discount_result.discount:
+
             discount_result.discount.usage_count = (discount_result.discount.usage_count or 0) + 1
             db.add(DiscountUsage(
                 discount_id=discount_result.discount.id,

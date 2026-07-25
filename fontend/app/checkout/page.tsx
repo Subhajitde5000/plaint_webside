@@ -6,9 +6,11 @@ import { useSearchParams } from "next/navigation";
 import SharedNavbar from "@/components/Navbar";
 import { useCheckout } from "@/features/orders/hooks/useCheckout";
 import { useCart } from "@/features/cart/hooks/useCart";
-import { useAddresses, useAddAddress, useUpdateAddress } from "@/features/profile";
+import { useAddresses, useAddAddress, useUpdateAddress, useLoyalty } from "@/features/profile";
 import { useAuthStore } from "@/store/auth.store";
 import { useCheckoutStore } from "@/store/checkout.store";
+import { validateLoyaltyApi } from "@/features/orders/api/orders.api";
+
 
 /* ── Design Tokens ─────────────────────────────────────── */
 const T = {
@@ -129,11 +131,18 @@ function CheckoutContent() {
   const { addAddress } = useAddAddress();
   const { updateAddress } = useUpdateAddress();
   const { user } = useAuthStore();
+  const { loyalty } = useLoyalty();
   const buyNowItem = useCheckoutStore((s) => s.buyNowItem);
-  const { setDiscountCode, setDiscountMeta } = useCheckoutStore();
+  const { setDiscountCode, setDiscountMeta, loyaltyPointsToUse, setLoyaltyPointsToUse, clearLoyaltyPoints } = useCheckoutStore();
+
+  const [loyaltyInput, setLoyaltyInput] = useState<string>("");
+  const [loyaltyError, setLoyaltyError] = useState<string>("");
+  const [loyaltySuccess, setLoyaltySuccess] = useState<string>("");
+  const [validatingLoyalty, setValidatingLoyalty] = useState(false);
 
   // Local state fallback for guest or manually added addresses
   const [customAddresses, setCustomAddresses] = useState<any[]>([]);
+
 
   // Map real saved addresses from profile API or local additions
   const savedAddresses = (fetchedAddresses && fetchedAddresses.length > 0)
@@ -388,6 +397,10 @@ function CheckoutContent() {
     });
   };
 
+  // Loyalty points helpers & calculations
+  const availablePoints = loyalty?.available_points ?? (loyalty ? Math.max(0, loyalty.points_balance - (loyalty.points_reserved || 0)) : 0);
+  const pointValueInr = loyalty?.point_value_inr ?? 1.0;
+
   // Calculations
   const subtotal = items.reduce((acc, item) => acc + item.price * item.qty, 0);
   let discountAmount = 0;
@@ -412,7 +425,17 @@ function CheckoutContent() {
   }
 
   discountAmount = Math.min(discountAmount, subtotal);
-  const postDiscountSubtotal = Math.max(0, subtotal - discountAmount);
+  const postCouponSubtotal = Math.max(0, subtotal - discountAmount);
+
+  // Loyalty Discount Calculation (Max 50% of subtotal)
+  let calculatedLoyaltyDiscount = 0;
+  if (loyaltyPointsToUse > 0) {
+    calculatedLoyaltyDiscount = Math.min(
+      loyaltyPointsToUse * pointValueInr,
+      postCouponSubtotal * 0.5
+    );
+  }
+  const postDiscountSubtotal = Math.max(0, postCouponSubtotal - calculatedLoyaltyDiscount);
 
   const isFreeShipping = (appliedCoupon?.discount_type as string === "free_shipping") ||
     (!appliedCoupon && cart?.automatic_discount?.free_shipping);
@@ -421,6 +444,83 @@ function CheckoutContent() {
   const taxAmount = postDiscountSubtotal * 0.08;
   const total = postDiscountSubtotal + shippingFee + taxAmount;
   const orderNumber = useRef("");
+
+  // Check if current coupon blocks loyalty points (20%+, BOGO, Flash Sale)
+  const isCouponRestrictedForLoyalty = (() => {
+    if (!appliedCoupon) return false;
+    if (appliedCoupon.discount_type === "percentage" && appliedCoupon.value >= 20) return true;
+    const code = (appliedCoupon.code || "").toUpperCase();
+    if (code.includes("BOGO") || code.includes("FLASH") || code.includes("PROMO20")) return true;
+    return false;
+  })();
+
+  // Handle Loyalty Point redemption validation
+  const handleApplyLoyalty = (ptsToUse: number) => {
+    setLoyaltyError("");
+    setLoyaltySuccess("");
+    if (ptsToUse <= 0) {
+      clearLoyaltyPoints();
+      setLoyaltyInput("");
+      return;
+    }
+    if (isCouponRestrictedForLoyalty) {
+      setLoyaltyError("Green Points cannot be combined with 20%+ coupons, BOGO, or Flash Sales.");
+      clearLoyaltyPoints();
+      return;
+    }
+    if (ptsToUse < 10) {
+      setLoyaltyError("Minimum 10 Green Points required to redeem.");
+      return;
+    }
+    if (ptsToUse > availablePoints) {
+      setLoyaltyError(`You only have ${availablePoints} Green Points available.`);
+      return;
+    }
+
+    setValidatingLoyalty(true);
+    validateLoyaltyApi(ptsToUse, subtotal, appliedCoupon?.code, discountAmount)
+      .then((res: any) => {
+        if (res.is_valid) {
+          setLoyaltyPointsToUse(ptsToUse, res.discount_amount);
+          setLoyaltySuccess(`Applied ${ptsToUse} Green Points (₹${res.discount_amount.toFixed(2)} off)!`);
+          setLoyaltyError("");
+        } else {
+          setLoyaltyError(res.message || "Invalid points redemption.");
+          clearLoyaltyPoints();
+        }
+      })
+      .catch((err: any) => {
+        setLoyaltyError(err?.response?.data?.detail || "Points validation failed.");
+        clearLoyaltyPoints();
+      })
+      .finally(() => setValidatingLoyalty(false));
+  };
+
+  const handleUseMaxPoints = () => {
+    if (isCouponRestrictedForLoyalty) {
+      setLoyaltyError("Green Points cannot be combined with 20%+ coupons, BOGO, or Flash Sales.");
+      return;
+    }
+    const totalBeforePoints = postCouponSubtotal + shippingFee + taxAmount;
+    const maxDiscountForMinPayable = Math.max(0, totalBeforePoints - 10.00);
+    const maxAllowedDiscount = Math.min(postCouponSubtotal * 0.5, maxDiscountForMinPayable);
+    const maxAllowedPoints = Math.min(availablePoints, Math.floor(maxAllowedDiscount / pointValueInr));
+
+    if (maxAllowedPoints < 10) {
+      setLoyaltyError(`Order total allows max ${maxAllowedPoints} pts (min 10 required, payable total min ₹10).`);
+      return;
+    }
+    setLoyaltyInput(String(maxAllowedPoints));
+    handleApplyLoyalty(maxAllowedPoints);
+  };
+
+
+  const handleClearLoyalty = () => {
+    clearLoyaltyPoints();
+    setLoyaltyInput("");
+    setLoyaltyError("");
+    setLoyaltySuccess("");
+  };
 
   const handleReviewConfirm = () => {
     if (!activeAddress) {
@@ -440,14 +540,11 @@ function CheckoutContent() {
       return;
     }
 
-    // For online methods (card / upi / netbanking / emi):
-    // The actual card/UPI details are captured securely by the Razorpay modal —
-    // frontend fields are just UI previews, so we skip blocking validation here.
-
     const orderPayload: any = {
       addressId: String(selectedAddressId),
       paymentMethod: paymentMethod === "cod" ? "cod" : "razorpay",
       discountCode: appliedCoupon?.code ?? undefined,
+      loyaltyPointsToUse: loyaltyPointsToUse > 0 ? loyaltyPointsToUse : undefined,
     };
 
     if (buyNowItem) {
@@ -465,6 +562,7 @@ function CheckoutContent() {
       }
     );
   };
+
 
   // Format Card Number (auto space)
   const handleNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1539,6 +1637,85 @@ function CheckoutContent() {
                 ))}
               </div>
 
+              {/* Green Points Loyalty Redemption */}
+              {user && (
+                <div style={{
+                  background: "rgba(0, 181, 102, 0.06)",
+                  border: `1.5px dashed ${T.green}`,
+                  borderRadius: 12,
+                  padding: "12px 14px",
+                  marginBottom: 14,
+                }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: T.heading, display: "flex", alignItems: "center", gap: 5 }}>
+                      🌿 Redeem Green Points
+                    </span>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: T.greenMid }}>
+                      {availablePoints} Avail (1 Pt = ₹1)
+                    </span>
+                  </div>
+
+                  {availablePoints >= 10 ? (
+                    <div>
+                      <div style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 6 }}>
+                        <input
+                          type="number"
+                          min={0}
+                          max={availablePoints}
+                          value={loyaltyInput}
+                          onChange={(e) => {
+                            setLoyaltyInput(e.target.value);
+                            const val = parseInt(e.target.value, 10);
+                            if (!isNaN(val) && val >= 10) {
+                              handleApplyLoyalty(val);
+                            } else if (!e.target.value) {
+                              handleClearLoyalty();
+                            }
+                          }}
+                          placeholder="Pts (e.g. 50)"
+                          style={{
+                            flex: 1, height: 36, borderRadius: 8, border: `1.5px solid ${T.border}`,
+                            padding: "0 10px", fontFamily: "'Outfit', sans-serif", fontSize: 13,
+                            outline: "none", background: T.white
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={handleUseMaxPoints}
+                          style={{
+                            height: 36, padding: "0 12px", borderRadius: 8,
+                            background: T.green, border: "none",
+                            color: T.white, fontSize: 12, fontWeight: 700, cursor: "pointer",
+                            whiteSpace: "nowrap"
+                          }}
+                        >
+                          Use Max
+                        </button>
+                        {loyaltyPointsToUse > 0 && (
+                          <button
+                            type="button"
+                            onClick={handleClearLoyalty}
+                            style={{
+                              height: 36, padding: "0 10px", borderRadius: 8,
+                              background: "transparent", border: `1px solid ${T.red}`,
+                              color: T.red, fontSize: 12, fontWeight: 600, cursor: "pointer"
+                            }}
+                          >
+                            Clear
+                          </button>
+                        )}
+                      </div>
+                      {loyaltyError && <p style={{ fontSize: 11, color: T.red, margin: "6px 0 0", fontWeight: 500 }}>{loyaltyError}</p>}
+                      {loyaltySuccess && <p style={{ fontSize: 11, color: T.greenMid, margin: "6px 0 0", fontWeight: 600 }}>{loyaltySuccess}</p>}
+                    </div>
+                  ) : (
+                    <p style={{ fontSize: 11, color: T.muted, margin: 0, lineHeight: 1.3 }}>
+                      You need at least 10 Green Points to redeem discount on orders.
+                    </p>
+                  )}
+                </div>
+              )}
+
               {/* Coupon / Promo Input */}
               <form onSubmit={handleApplyCoupon} style={{ display: "flex", gap: 8, marginBottom: 12 }}>
                 <input
@@ -1579,10 +1756,17 @@ function CheckoutContent() {
                     <span style={{ fontWeight: 600 }}>-₹{discountAmount.toFixed(2)}</span>
                   </div>
                 )}
+                {loyaltyPointsToUse > 0 && (
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: T.green }}>
+                    <span>🌿 Green Points ({loyaltyPointsToUse} pts)</span>
+                    <span style={{ fontWeight: 600 }}>-₹{calculatedLoyaltyDiscount.toFixed(2)}</span>
+                  </div>
+                )}
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: T.body }}>
                   <span>Shipping</span>
                   <span>{shippingFee === 0 ? <span style={{ color: T.green, fontWeight: 600 }}>Free</span> : `₹${shippingFee.toFixed(2)}`}</span>
                 </div>
+
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: T.body }}>
                   <span>Tax (8%)</span>
                   <span style={{ fontWeight: 500 }}>₹{taxAmount.toFixed(2)}</span>
