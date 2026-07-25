@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useRef } from 'react';
+import React, { useRef, useEffect } from 'react';
 
 /* ─── Simple Rich Text Editor ──────────────────────────────────────────────── */
 interface RichTextEditorProps {
@@ -13,6 +13,13 @@ interface RichTextEditorProps {
 
 export function RichTextEditor({ value, onChange, placeholder = 'Write a detailed description of this plant...', minHeight = 200, id = 'rte' }: RichTextEditorProps) {
   const ref = useRef<HTMLDivElement>(null);
+
+  // Sync value to DOM only when value changes externally and differs from innerHTML
+  useEffect(() => {
+    if (ref.current && ref.current.innerHTML !== value) {
+      ref.current.innerHTML = value || '';
+    }
+  }, [value]);
 
   const exec = (cmd: string, val?: string) => {
     document.execCommand(cmd, false, val);
@@ -71,6 +78,7 @@ export function RichTextEditor({ value, onChange, placeholder = 'Write a detaile
         suppressContentEditableWarning
         onInput={handleInput}
         data-placeholder={placeholder}
+        dir="ltr"
         style={{
           minHeight,
           padding: '12px 16px',
@@ -79,8 +87,8 @@ export function RichTextEditor({ value, onChange, placeholder = 'Write a detaile
           lineHeight: 1.7,
           outline: 'none',
           fontFamily: "'Outfit', sans-serif",
+          textAlign: 'left',
         }}
-        dangerouslySetInnerHTML={value ? { __html: value } : undefined}
       />
       <style>{`
         [role="textbox"]:empty:before {

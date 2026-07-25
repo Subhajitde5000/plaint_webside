@@ -1043,7 +1043,9 @@ function OrderDetailPanel({
                 <div style={{ padding:"14px 18px", display:"flex", flexDirection:"column", gap:"6px" }}>
                   {[
                     { l: "Subtotal", v: `₹${parseFloat(order.subtotal).toLocaleString("en-IN")}` },
-                    { l: `Discount${order.discount_code ? ` (${order.discount_code})` : ""}`, v: `−₹${parseFloat(order.discount_amount).toLocaleString("en-IN")}`, c: T.delivered },
+                    ...(parseFloat(order.discount_amount) > 0
+                      ? [{ l: `Discount${order.discount_code ? ` (${order.discount_code})` : " (Automatic)"}`, v: `−₹${parseFloat(order.discount_amount).toLocaleString("en-IN")}`, c: T.delivered }]
+                      : []),
                     { l: "Shipping", v: `₹${parseFloat(order.shipping_amount).toLocaleString("en-IN")}` },
                     { l: "Tax", v: `₹${parseFloat(order.tax_amount).toLocaleString("en-IN")}` }
                   ].map(r => (
@@ -1178,7 +1180,9 @@ function OrderDetailPanel({
             <SideCard title="Order Summary">
               {[
                 { l: "Subtotal", v: `₹${parseFloat(order.subtotal).toLocaleString("en-IN")}` },
-                { l: `Discount${order.discount_code ? ` (${order.discount_code})` : ""}`, v: `−₹${parseFloat(order.discount_amount).toLocaleString("en-IN")}`, c: T.delivered },
+                ...(parseFloat(order.discount_amount) > 0
+                  ? [{ l: `Discount${order.discount_code ? ` (${order.discount_code})` : " (Automatic)"}`, v: `−₹${parseFloat(order.discount_amount).toLocaleString("en-IN")}`, c: T.delivered }]
+                  : []),
                 { l: "Shipping", v: `₹${parseFloat(order.shipping_amount).toLocaleString("en-IN")}` },
                 { l: "Tax", v: `₹${parseFloat(order.tax_amount).toLocaleString("en-IN")}` }
               ].map(r=>(

@@ -124,12 +124,13 @@ function CheckoutContent() {
   const searchParams = useSearchParams();
   const [step, setStep] = useState<"summary" | "payment" | "success">("summary");
   const { placeOrder, isPlacing, error: checkoutError } = useCheckout();
-  const { cart } = useCart();
+  const { cart, applyDiscount, removeDiscount } = useCart();
   const { addresses: fetchedAddresses } = useAddresses();
   const { addAddress } = useAddAddress();
   const { updateAddress } = useUpdateAddress();
   const { user } = useAuthStore();
   const buyNowItem = useCheckoutStore((s) => s.buyNowItem);
+  const { setDiscountCode, setDiscountMeta } = useCheckoutStore();
 
   // Local state fallback for guest or manually added addresses
   const [customAddresses, setCustomAddresses] = useState<any[]>([]);
@@ -334,11 +335,91 @@ function CheckoutContent() {
     }
   };
 
+  // ── Coupon / Automatic Discount State ────────────────────────────────
+  const storedMeta = useCheckoutStore.getState().discountMeta;
+  const [couponInput, setCouponInput] = useState("");
+  const [appliedCoupon, setAppliedCoupon] = useState<{
+    code: string;
+    discount_type: "percentage" | "fixed";
+    value: number;
+  } | null>(storedMeta);
+  const [couponError, setCouponError] = useState("");
+  const [couponSuccess, setCouponSuccess] = useState(
+    storedMeta ? `Coupon "${storedMeta.code}" applied!` : ""
+  );
+  const [couponLoading, setCouponLoading] = useState(false);
+
+  const handleApplyCoupon = (e: React.FormEvent) => {
+    e.preventDefault();
+    setCouponError("");
+    setCouponSuccess("");
+    if (!couponInput.trim()) { setCouponError("Please enter a coupon code."); return; }
+    setCouponLoading(true);
+    applyDiscount(couponInput.trim(), {
+      onSuccess: (data: any) => {
+        const meta = {
+          code: data.code,
+          discount_type: data.discount_type as "percentage" | "fixed",
+          value: Number(data.value),
+        };
+        setAppliedCoupon(meta);
+        setDiscountCode(data.code);
+        setDiscountMeta(meta);
+        setCouponSuccess(`Coupon "${data.code}" applied!`);
+        setCouponLoading(false);
+      },
+      onError: (err: any) => {
+        setCouponError(err?.response?.data?.detail || "Invalid or expired coupon code.");
+        setCouponLoading(false);
+      },
+    });
+  };
+
+  const handleRemoveCoupon = () => {
+    removeDiscount(undefined, {
+      onSuccess: () => {
+        setAppliedCoupon(null);
+        setCouponInput("");
+        setCouponSuccess("");
+        setCouponError("");
+        setDiscountCode(null);
+        setDiscountMeta(null);
+      },
+    });
+  };
+
   // Calculations
   const subtotal = items.reduce((acc, item) => acc + item.price * item.qty, 0);
-  const shippingFee = subtotal >= 999 || items.length === 0 ? 0 : 99.00;
-  const taxAmount = subtotal * 0.08;
-  const total = subtotal + shippingFee + taxAmount;
+  let discountAmount = 0;
+  let discountLabel = "";
+
+  if (appliedCoupon) {
+    if (appliedCoupon.discount_type === "percentage") {
+      discountAmount = (subtotal * appliedCoupon.value) / 100;
+    } else {
+      discountAmount = appliedCoupon.value;
+    }
+    discountLabel = `Discount (${appliedCoupon.code})`;
+  } else if (cart?.automatic_discount) {
+    const auto = cart.automatic_discount;
+    discountAmount = Number(auto.discount_amount ?? 0);
+    if (!discountAmount && auto.value) {
+      discountAmount = auto.discount_type === "percentage"
+        ? (subtotal * Number(auto.value)) / 100
+        : Number(auto.value);
+    }
+    discountLabel = `Automatic Discount (${auto.title || auto.code || "Applied"})`;
+  }
+
+  discountAmount = Math.min(discountAmount, subtotal);
+  const postDiscountSubtotal = Math.max(0, subtotal - discountAmount);
+
+  const isFreeShipping = (appliedCoupon?.discount_type as string === "free_shipping") ||
+    (!appliedCoupon && cart?.automatic_discount?.free_shipping);
+
+  const shippingFee = isFreeShipping || postDiscountSubtotal >= 999 || items.length === 0 ? 0 : 99.00;
+  const taxAmount = postDiscountSubtotal * 0.08;
+  const total = postDiscountSubtotal + shippingFee + taxAmount;
   const orderNumber = useRef("");
 
   const handleReviewConfirm = () => {
@@ -366,6 +447,7 @@ function CheckoutContent() {
     const orderPayload: any = {
       addressId: String(selectedAddressId),
       paymentMethod: paymentMethod === "cod" ? "cod" : "razorpay",
+      discountCode: appliedCoupon?.code ?? undefined,
     };
 
     if (buyNowItem) {
@@ -1457,12 +1539,46 @@ function CheckoutContent() {
                 ))}
               </div>
 
+              {/* Coupon / Promo Input */}
+              <form onSubmit={handleApplyCoupon} style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+                <input
+                  value={couponInput}
+                  onChange={(e) => setCouponInput(e.target.value)}
+                  placeholder="Promo / Coupon Code"
+                  disabled={!!appliedCoupon || couponLoading}
+                  style={{
+                    flex: 1, border: `1.5px solid ${T.border}`, borderRadius: 10,
+                    padding: "9px 12px", fontFamily: "'Outfit', sans-serif", fontSize: 13,
+                    outline: "none", background: T.bgMuted,
+                  }}
+                />
+                {appliedCoupon ? (
+                  <button type="button" className="outline-btn" onClick={handleRemoveCoupon}
+                    style={{ padding: "0 14px", height: 40, borderRadius: 10, fontSize: 13, color: T.red, borderColor: T.red, flexShrink: 0 }}>
+                    Remove
+                  </button>
+                ) : (
+                  <button type="submit" className="outline-btn" disabled={couponLoading}
+                    style={{ padding: "0 14px", height: 40, borderRadius: 10, fontSize: 13, flexShrink: 0 }}>
+                    {couponLoading ? "..." : "Apply"}
+                  </button>
+                )}
+              </form>
+              {couponError && <p style={{ fontSize: 11, color: T.red, marginBottom: 10 }}>{couponError}</p>}
+              {couponSuccess && <p style={{ fontSize: 11, color: T.green, marginBottom: 10 }}>{couponSuccess}</p>}
+
               {/* Subtotal metrics */}
               <div style={{ display: "flex", flexDirection: "column", gap: 10, borderTop: `1px solid ${T.border}`, borderBottom: `1px solid ${T.border}`, padding: "14px 0", marginBottom: 16 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: T.body }}>
                   <span>Subtotal</span>
                   <span style={{ fontWeight: 500 }}>₹{subtotal.toFixed(2)}</span>
                 </div>
+                {discountAmount > 0 && (
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: T.green }}>
+                    <span>{discountLabel}</span>
+                    <span style={{ fontWeight: 600 }}>-₹{discountAmount.toFixed(2)}</span>
+                  </div>
+                )}
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: T.body }}>
                   <span>Shipping</span>
                   <span>{shippingFee === 0 ? <span style={{ color: T.green, fontWeight: 600 }}>Free</span> : `₹${shippingFee.toFixed(2)}`}</span>
@@ -1481,7 +1597,7 @@ function CheckoutContent() {
 
               {shippingFee > 0 && (
                 <div style={{ marginTop: "14px", background: "rgba(0,181,102,0.06)", border: `1px dashed ${T.green}`, borderRadius: "8px", padding: "10px", fontSize: "11px", color: T.greenMid, textAlign: "center", fontWeight: 500 }}>
-                  💡 Add ₹{(999.00 - subtotal).toFixed(2)} more for Free Shipping!
+                  💡 Add ₹{(999.00 - postDiscountSubtotal).toFixed(2)} more for Free Shipping!
                 </div>
               )}
             </div>
@@ -1525,14 +1641,35 @@ function CheckoutContent() {
               {items.map((item, idx) => (
                 <div key={idx} style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", color: T.body }}>
                   <span>{item.name} <span style={{ color: T.muted }}>x{item.qty}</span></span>
-                  <span style={{ fontWeight: 600 }}>${(item.price * item.qty).toFixed(2)}</span>
+                  <span style={{ fontWeight: 600 }}>₹{(item.price * item.qty).toFixed(2)}</span>
                 </div>
               ))}
             </div>
 
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", color: T.heading, fontWeight: 700, marginTop: "12px", borderTop: `1px solid ${T.border}`, paddingTop: "10px" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginTop: "12px", borderTop: `1px solid ${T.border}`, paddingTop: "10px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px", color: T.muted }}>
+                <span>Subtotal</span>
+                <span>₹{subtotal.toFixed(2)}</span>
+              </div>
+              {discountAmount > 0 && (
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px", color: T.green }}>
+                  <span>{discountLabel}</span>
+                  <span style={{ fontWeight: 600 }}>-₹{discountAmount.toFixed(2)}</span>
+                </div>
+              )}
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px", color: T.muted }}>
+                <span>Shipping</span>
+                <span>{shippingFee === 0 ? <span style={{ color: T.green }}>Free</span> : `₹${shippingFee.toFixed(2)}`}</span>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px", color: T.muted }}>
+                <span>Tax (8%)</span>
+                <span>₹{taxAmount.toFixed(2)}</span>
+              </div>
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "14px", color: T.heading, fontWeight: 800, marginTop: "4px", borderTop: `1px solid ${T.border}`, paddingTop: "10px" }}>
               <span>Total Paid:</span>
-              <span>${total.toFixed(2)}</span>
+              <span>₹{total.toFixed(2)}</span>
             </div>
             
             <p style={{ fontSize: "12px", color: T.greenMid, fontWeight: 700, marginTop: "14px", borderTop: `1px dashed ${T.border}`, paddingTop: "12px", textAlign: "center" }}>

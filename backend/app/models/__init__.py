@@ -14,7 +14,7 @@ from app.models.order import (
     Return, ReturnItem, OrderNote, OrderTag
 )
 from app.models.discount import (
-    Discount, DiscountProduct, DiscountCollection, DiscountUsage, BogoConfig
+    Discount, DiscountProduct, DiscountCollection, DiscountUsage, BogoConfig, DiscountAuditLog
 )
 from app.models.loyalty import LoyaltyAccount, LoyaltyTransaction, Wishlist, WishlistItem
 from app.models.review import Review, ReviewPhoto, ReviewFlag, ReviewModerationHistory
@@ -35,7 +35,7 @@ __all__ = [
     "Cart", "CartItem",
     "Order", "OrderItem", "OrderStatusHistory", "Refund",
     "Return", "ReturnItem", "OrderNote", "OrderTag",
-    "Discount", "DiscountProduct", "DiscountCollection", "DiscountUsage", "BogoConfig",
+    "Discount", "DiscountProduct", "DiscountCollection", "DiscountUsage", "BogoConfig", "DiscountAuditLog",
     "LoyaltyAccount", "LoyaltyTransaction", "Wishlist", "WishlistItem",
     "Review", "ReviewPhoto", "ReviewFlag", "ReviewModerationHistory",
     "GardenServiceType", "GardenBooking", "Gardener",

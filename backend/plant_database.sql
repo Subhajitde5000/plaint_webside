@@ -645,7 +645,7 @@ CREATE TABLE IF NOT EXISTS discounts (
     starts_at               DATETIME NOT NULL,
     ends_at                 DATETIME,               -- NULL = no end
     -- Status (computed from dates + usage; stored for fast queries)
-    status                  ENUM('draft','scheduled','active','paused','expired') DEFAULT 'draft',
+    status                  ENUM('draft','scheduled','active','paused','expired','archived') DEFAULT 'draft',
 
     created_by              BIGINT UNSIGNED,
     created_at              DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -656,6 +656,19 @@ CREATE TABLE IF NOT EXISTS discounts (
     INDEX idx_status (status),
     INDEX idx_starts_at (starts_at),
     INDEX idx_ends_at (ends_at)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS discount_audit_logs (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    discount_id BIGINT UNSIGNED NOT NULL,
+    admin_id BIGINT UNSIGNED,
+    action VARCHAR(50) NOT NULL,
+    details VARCHAR(2000),
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (discount_id) REFERENCES discounts(id) ON DELETE CASCADE,
+    FOREIGN KEY (admin_id) REFERENCES admin_users(id) ON DELETE SET NULL,
+    INDEX idx_discount_audit_discount_id (discount_id),
+    INDEX idx_discount_audit_created_at (created_at)
 ) ENGINE=InnoDB;
 
 -- ─────────────────────────────────────────────────────────────────────
