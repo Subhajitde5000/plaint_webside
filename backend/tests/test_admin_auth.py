@@ -75,3 +75,80 @@ def test_admin_logout(client: TestClient, created_admin):
     resp = client.post("/api/v1/admin/auth/logout", cookies=login_resp.cookies)
     assert resp.status_code == 200
     assert resp.json()["message"] == "Logged out."
+
+
+def test_admin_change_password_success(client: TestClient, created_admin):
+    # 1. Login
+    login_resp = client.post("/api/v1/admin/auth/login", json={
+        "email": created_admin["email"],
+        "password": created_admin["password"],
+    })
+    token = login_resp.json()["access_token"]
+
+    # 2. Change password
+    resp = client.post(
+        "/api/v1/admin/auth/change-password",
+        json={
+            "old_password": created_admin["password"],
+            "new_password": "NewSecretPassword123!",
+        },
+        headers={"Authorization": f"Bearer {token}"}
+    )
+    assert resp.status_code == 200
+    assert resp.json()["message"] == "Password changed successfully."
+
+    # 3. Test logging in with old password (should fail)
+    login_old = client.post("/api/v1/admin/auth/login", json={
+        "email": created_admin["email"],
+        "password": created_admin["password"],
+    })
+    assert login_old.status_code == 401
+
+    # 4. Test logging in with new password (should succeed)
+    login_new = client.post("/api/v1/admin/auth/login", json={
+        "email": created_admin["email"],
+        "password": "NewSecretPassword123!",
+    })
+    assert login_new.status_code == 200
+
+
+def test_admin_change_password_invalid_old(client: TestClient, created_admin):
+    # 1. Login
+    login_resp = client.post("/api/v1/admin/auth/login", json={
+        "email": created_admin["email"],
+        "password": created_admin["password"],
+    })
+    token = login_resp.json()["access_token"]
+
+    # 2. Change password with wrong old password
+    resp = client.post(
+        "/api/v1/admin/auth/change-password",
+        json={
+            "old_password": "incorrect_old_password",
+            "new_password": "NewSecretPassword123!",
+        },
+        headers={"Authorization": f"Bearer {token}"}
+    )
+    assert resp.status_code == 400
+    assert resp.json()["detail"] == "Invalid old password."
+
+
+def test_admin_change_password_too_short(client: TestClient, created_admin):
+    # 1. Login
+    login_resp = client.post("/api/v1/admin/auth/login", json={
+        "email": created_admin["email"],
+        "password": created_admin["password"],
+    })
+    token = login_resp.json()["access_token"]
+
+    # 2. Change password with too short new password
+    resp = client.post(
+        "/api/v1/admin/auth/change-password",
+        json={
+            "old_password": created_admin["password"],
+            "new_password": "short",
+        },
+        headers={"Authorization": f"Bearer {token}"}
+    )
+    assert resp.status_code == 422
+

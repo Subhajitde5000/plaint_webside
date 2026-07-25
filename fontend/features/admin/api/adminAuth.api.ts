@@ -37,3 +37,17 @@ export const adminRefreshApi = async (): Promise<{ access_token: string; token_t
   const res = await api.post("/admin/auth/refresh");
   return res.data;
 };
+
+export interface AdminChangePasswordPayload {
+  old_password: string;
+  new_password: string;
+}
+
+export const adminChangePasswordApi = async (data: AdminChangePasswordPayload): Promise<{ message: string }> => {
+  const res = await api.post("/admin/auth/change-password", {
+    old_password: data.old_password,
+    new_password: data.new_password,
+  });
+  return res.data;
+};
+

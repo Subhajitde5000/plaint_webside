@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useAdminAuth } from "@/features/admin/hooks/useAdminAuth";
+import { adminChangePasswordApi } from "@/features/admin/api/adminAuth.api";
 
 /* ════════════════════════════════════════════
    SVG Icon Library
@@ -346,6 +347,300 @@ function NavItem({ item, isActive, collapsed }: {
   );
 }
 
+// Change Password Modal
+function ChangePasswordModal({ onClose }: { onClose: () => void }) {
+  const [oldPassword, setOldPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showOld, setShowOld] = useState(false);
+  const [showNew, setShowNew] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [onClose]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setSuccess("");
+
+    if (!oldPassword || !newPassword || !confirmPassword) {
+      setError("All fields are required.");
+      return;
+    }
+
+    if (newPassword.length < 8) {
+      setError("New password must be at least 8 characters long.");
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setError("New passwords do not match.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await adminChangePasswordApi({ old_password: oldPassword, new_password: newPassword });
+      setSuccess("Password changed successfully!");
+      setOldPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setTimeout(() => {
+        onClose();
+      }, 1500);
+    } catch (err: any) {
+      const errMsg = err.response?.data?.detail || "Failed to change password. Please try again.";
+      setError(errMsg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div
+      style={{
+        position: "fixed", inset: 0, zIndex: 300,
+        background: "rgba(15,17,23,0.75)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+      }}
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Change Password"
+    >
+      <div
+        style={{
+          width: "440px", maxWidth: "calc(100vw - 32px)",
+          background: "var(--admin-bg-overlay)",
+          border: "1px solid var(--admin-border)",
+          borderRadius: "var(--admin-radius-lg)",
+          boxShadow: "var(--admin-shadow-lg)",
+          overflow: "hidden",
+          animation: "admin-fade-in var(--admin-motion-fast) ease-out",
+        }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 20px", borderBottom: "1px solid var(--admin-border-muted)" }}>
+          <div style={{ flex: 1 }}>
+            <h3 style={{ fontSize: "16px", fontWeight: 700, color: "var(--admin-text)", margin: 0 }}>Account Settings</h3>
+            <p style={{ fontSize: "12px", color: "var(--admin-text-muted)", margin: "2px 0 0 0" }}>Update your administrator account password</p>
+          </div>
+          <button onClick={onClose} style={{ background: "transparent", border: "none", cursor: "pointer", color: "var(--admin-text-muted)", display: "flex", padding: "4px" }}>
+            <Icon.X />
+          </button>
+        </div>
+
+        {/* Form Body */}
+        <form onSubmit={handleSubmit} style={{ padding: "20px" }}>
+          {error && (
+            <div style={{
+              background: "var(--admin-error-bg)",
+              border: "1px solid var(--admin-error)",
+              borderRadius: "var(--admin-radius-sm)",
+              padding: "10px 12px",
+              color: "var(--admin-error)",
+              fontSize: "12px",
+              marginBottom: "16px",
+              fontWeight: 500
+            }}>
+              {error}
+            </div>
+          )}
+
+          {success && (
+            <div style={{
+              background: "var(--admin-success-bg)",
+              border: "1px solid var(--admin-success)",
+              borderRadius: "var(--admin-radius-sm)",
+              padding: "10px 12px",
+              color: "var(--admin-success)",
+              fontSize: "12px",
+              marginBottom: "16px",
+              fontWeight: 500
+            }}>
+              {success}
+            </div>
+          )}
+
+          <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+            {/* Old Password */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+              <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--admin-text-label)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                Old Password
+              </label>
+              <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+                <input
+                  ref={inputRef}
+                  type={showOld ? "text" : "password"}
+                  value={oldPassword}
+                  onChange={e => setOldPassword(e.target.value)}
+                  placeholder="Enter current password"
+                  required
+                  style={{
+                    width: "100%", height: "38px",
+                    background: "var(--admin-bg-input)",
+                    border: "1px solid var(--admin-border)",
+                    borderRadius: "var(--admin-radius-sm)",
+                    padding: "0 40px 0 12px",
+                    color: "var(--admin-text)",
+                    fontSize: "13px",
+                    outline: "none",
+                    fontFamily: "inherit"
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowOld(!showOld)}
+                  style={{
+                    position: "absolute", right: "12px",
+                    background: "transparent", border: "none", cursor: "pointer",
+                    color: "var(--admin-text-muted)", display: "flex", padding: 0
+                  }}
+                >
+                  {showOld ? (
+                    <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24M1 1l22 22"/></svg>
+                  ) : (
+                    <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* New Password */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+              <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--admin-text-label)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                New Password
+              </label>
+              <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+                <input
+                  type={showNew ? "text" : "password"}
+                  value={newPassword}
+                  onChange={e => setNewPassword(e.target.value)}
+                  placeholder="At least 8 characters"
+                  required
+                  style={{
+                    width: "100%", height: "38px",
+                    background: "var(--admin-bg-input)",
+                    border: "1px solid var(--admin-border)",
+                    borderRadius: "var(--admin-radius-sm)",
+                    padding: "0 40px 0 12px",
+                    color: "var(--admin-text)",
+                    fontSize: "13px",
+                    outline: "none",
+                    fontFamily: "inherit"
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowNew(!showNew)}
+                  style={{
+                    position: "absolute", right: "12px",
+                    background: "transparent", border: "none", cursor: "pointer",
+                    color: "var(--admin-text-muted)", display: "flex", padding: 0
+                  }}
+                >
+                  {showNew ? (
+                    <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24M1 1l22 22"/></svg>
+                  ) : (
+                    <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Re-enter New Password */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+              <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--admin-text-label)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                Re-enter New Password
+              </label>
+              <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+                <input
+                  type={showConfirm ? "text" : "password"}
+                  value={confirmPassword}
+                  onChange={e => setConfirmPassword(e.target.value)}
+                  placeholder="Confirm new password"
+                  required
+                  style={{
+                    width: "100%", height: "38px",
+                    background: "var(--admin-bg-input)",
+                    border: "1px solid var(--admin-border)",
+                    borderRadius: "var(--admin-radius-sm)",
+                    padding: "0 40px 0 12px",
+                    color: "var(--admin-text)",
+                    fontSize: "13px",
+                    outline: "none",
+                    fontFamily: "inherit"
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirm(!showConfirm)}
+                  style={{
+                    position: "absolute", right: "12px",
+                    background: "transparent", border: "none", cursor: "pointer",
+                    color: "var(--admin-text-muted)", display: "flex", padding: 0
+                  }}
+                >
+                  {showConfirm ? (
+                    <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24M1 1l22 22"/></svg>
+                  ) : (
+                    <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Footer Actions */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: "10px", marginTop: "24px" }}>
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={loading}
+              style={{
+                height: "36px", padding: "0 16px",
+                background: "transparent", border: "1px solid var(--admin-border)",
+                borderRadius: "var(--admin-radius-sm)",
+                color: "var(--admin-text-label)", fontSize: "13px", fontWeight: 500,
+                cursor: "pointer", transition: "all var(--admin-motion-instant)"
+              }}
+              onMouseEnter={e => { if (!loading) e.currentTarget.style.background = "var(--admin-bg-elevated)"; }}
+              onMouseLeave={e => { if (!loading) e.currentTarget.style.background = "transparent"; }}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={loading}
+              style={{
+                height: "36px", padding: "0 16px",
+                background: "var(--admin-accent)", border: "none",
+                borderRadius: "var(--admin-radius-sm)",
+                color: "white", fontSize: "13px", fontWeight: 600,
+                cursor: "pointer", transition: "all var(--admin-motion-instant)",
+                opacity: loading ? 0.7 : 1
+              }}
+            >
+              {loading ? "Saving..." : "Save Password"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 // Global Search Modal
 function SearchModal({ onClose }: { onClose: () => void }) {
   const [query, setQuery] = useState("");
@@ -564,6 +859,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [searchOpen, setSearchOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
   // Ctrl+K global search shortcut
@@ -775,13 +1071,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               >
                 {[
                   { label: "My Profile", icon: <Icon.User /> },
-                  { label: "Account Settings", icon: <Icon.Settings /> },
+                  { label: "Account Settings", icon: <Icon.Settings />, onClick: () => { setChangePasswordOpen(true); setUserMenuOpen(false); } },
                   { label: "Activity Log", icon: <Icon.ActivityLog /> },
                   { label: "Switch Role", icon: <Icon.Staff /> },
                 ].map((m, i) => (
                   <button
                     key={i}
                     role="menuitem"
+                    onClick={m.onClick}
                     style={{
                       width: "100%", display: "flex", alignItems: "center", gap: "10px",
                       padding: "10px 14px", background: "transparent", border: "none",
@@ -981,6 +1278,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       {/* ── OVERLAYS ── */}
       {searchOpen && <SearchModal onClose={() => setSearchOpen(false)} />}
       {notifOpen && <NotificationPanel onClose={() => setNotifOpen(false)} />}
+      {changePasswordOpen && <ChangePasswordModal onClose={() => setChangePasswordOpen(false)} />}
     </div>
   );
 }
