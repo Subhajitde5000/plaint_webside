@@ -505,6 +505,7 @@ CREATE TABLE IF NOT EXISTS order_items (
     total_price     DECIMAL(10,2) NOT NULL,
     tax_amount      DECIMAL(10,2) DEFAULT 0.00,
     image_url       VARCHAR(500),               -- snapshot
+    review_reminder_sent_at DATETIME NULL,
 
     FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
     FOREIGN KEY (variant_id) REFERENCES product_variants(id),
@@ -816,10 +817,15 @@ CREATE TABLE IF NOT EXISTS reviews (
     rating              TINYINT UNSIGNED NOT NULL CHECK (rating BETWEEN 1 AND 5),
     title               VARCHAR(255),
     body                TEXT,
+    video_url           VARCHAR(500) NULL,
     is_verified_purchase BOOLEAN DEFAULT FALSE,
     is_featured         BOOLEAN DEFAULT FALSE,
-    status              ENUM('submitted','pending','published','rejected','flagged') DEFAULT 'pending',
+    is_edited           TINYINT(1) DEFAULT 0,
+    edited_at           DATETIME NULL,
+    status              ENUM('submitted', 'pending', 'published', 'rejected', 'flagged', 'hidden') DEFAULT 'pending',
     rejection_reason    VARCHAR(500),
+    spam_score          SMALLINT DEFAULT 0,
+    ai_risk_level       VARCHAR(20) DEFAULT 'low',
     admin_reply         TEXT,
     admin_reply_at      DATETIME,
     admin_reply_by      BIGINT UNSIGNED,
@@ -830,6 +836,7 @@ CREATE TABLE IF NOT EXISTS reviews (
     moderated_at        DATETIME,
     created_at          DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at          DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    deleted_at          DATETIME NULL,
 
     FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
@@ -883,6 +890,17 @@ CREATE TABLE IF NOT EXISTS review_moderation_history (
     FOREIGN KEY (review_id) REFERENCES reviews(id) ON DELETE CASCADE,
     FOREIGN KEY (admin_id) REFERENCES admin_users(user_id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS review_helpful_votes (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  review_id BIGINT NOT NULL,
+  user_id BIGINT NOT NULL,
+  is_helpful TINYINT(1) DEFAULT 1,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (review_id) REFERENCES reviews(id) ON DELETE CASCADE,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  UNIQUE KEY uk_review_user (review_id, user_id)
+);
 
 -- ─────────────────────────────────────────────────────────────────────
 -- Garden Services

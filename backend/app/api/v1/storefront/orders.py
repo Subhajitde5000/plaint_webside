@@ -230,7 +230,74 @@ async def get_order(
     ).first()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found.")
-    return order
+
+    # Eagerly build the response while the session is open so that
+    # lazy-loaded relationships (items, status_history) are accessible.
+    addr = order.shipping_address
+    return {
+        "id": order.id,
+        "uuid": order.uuid,
+        "order_number": order.order_number,
+        "status": order.status,
+        "payment_status": order.payment_status,
+        "fulfillment_status": order.fulfillment_status,
+        "payment_gateway": order.payment_gateway,
+        "subtotal": str(order.subtotal),
+        "discount_amount": str(order.discount_amount),
+        "discount_code": order.discount_code,
+        "loyalty_points_used": order.loyalty_points_used or 0,
+        "loyalty_discount_amount": str(order.loyalty_discount_amount or 0),
+        "shipping_amount": str(order.shipping_amount),
+        "tax_amount": str(order.tax_amount),
+        "total": str(order.total),
+        "currency": order.currency,
+        "shipping_carrier": order.shipping_carrier,
+        "tracking_number": order.tracking_number,
+        "tracking_url": order.tracking_url,
+        "estimated_delivery": order.estimated_delivery.isoformat() if order.estimated_delivery else None,
+        "notes": order.notes,
+        "gift_message": order.gift_message,
+        "is_gift": order.is_gift,
+        "created_at": order.created_at.isoformat() if order.created_at else None,
+        "updated_at": order.updated_at.isoformat() if order.updated_at else None,
+        "shipping_address": {
+            "recipient_name": addr.recipient_name,
+            "phone": addr.phone,
+            "address_line1": addr.line1,
+            "address_line2": addr.line2,
+            "city": addr.city,
+            "state": addr.state,
+            "postal_code": addr.pincode,
+            "country": addr.country,
+        } if addr else None,
+        "items": [
+            {
+                "id": item.id,
+                "variant_id": item.variant_id,
+                "product_id": item.product_id,
+                "title": item.title,
+                "variant_title": item.variant_title,
+                "sku": item.sku,
+                "quantity": item.quantity,
+                "unit_price": str(item.unit_price),
+                "compare_at_price": str(item.compare_at_price) if item.compare_at_price else None,
+                "discount_amount": str(item.discount_amount),
+                "total_price": str(item.total_price),
+                "tax_amount": str(item.tax_amount),
+                "image_url": item.image_url,
+            }
+            for item in order.items
+        ],
+        "status_history": [
+            {
+                "status": h.status,
+                "location": h.location,
+                "description": h.description,
+                "created_at": h.created_at.isoformat() if h.created_at else None,
+            }
+            for h in order.status_history
+        ],
+    }
 
 
 @router.post("/{order_uuid}/cancel")

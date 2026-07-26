@@ -14,6 +14,8 @@ import Link from "next/link";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useMyOrders } from "@/features/orders/hooks/useMyOrders";
 import { cancelOrderApi, returnOrderApi } from "@/features/orders/api/orders.api";
+import { useMyReviews, useSubmitReview, useEditReview, useDeleteReview } from "@/features/reviews";
+import WriteReviewModal from "@/components/WriteReviewModal";
 /* ─────────────────────────────────────────────
    DESIGN TOKENS (CSS-in-JS via style injection)
 ───────────────────────────────────────────── */
@@ -701,13 +703,6 @@ const NOTIFICATIONS = [
   { id: 1, icon: "🚚", title: "Your order has been shipped!", body: "Check your orders for details.", time: "recently", read: false },
   { id: 2, icon: "💧", title: "Time to water a plant!", body: "Check your plant diary.", time: "1 day ago", read: false },
 ];
-const REVIEWS_WRITTEN = [
-  { id: 1, product: "Monstera Deliciosa", ordered: "15 Jun 2026", rating: 5, img: "🌿", text: "Absolutely beautiful plant! Arrived in perfect condition and the packaging was excellent." },
-  { id: 2, product: "Peace Lily", ordered: "08 Jun 2026", rating: 4, img: "🌸", text: "Healthy plant with great instructions. Arrived a day early!" },
-];
-const REVIEWS_PENDING = [
-  { id: 3, product: "Pothos Golden", ordered: "28 May 2026", img: "🍃" },
-];
 /* ─────────────────────────────────────────────
    HELPERS
 ───────────────────────────────────────────── */
@@ -949,6 +944,7 @@ function OrdersSection({ onToast }: { onToast: (msg: string, t?: ToastType["type
   const [search, setSearch] = useState("");
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
   const [trackingOrder, setTrackingOrder] = useState<any | null>(null);
+  const [pendingReviewOrder, setPendingReviewOrder] = useState<any | null>(null);
   
   const qc = useQueryClient();
 
@@ -1015,6 +1011,8 @@ function OrdersSection({ onToast }: { onToast: (msg: string, t?: ToastType["type
       shipping_carrier: o.shipping_carrier,
       tracking_url: o.tracking_url,
       items: (o.items || []).map((item: any) => ({
+        product_id: item.product_id,
+        order_item_id: item.id,
         name: item.title,
         variant: item.variant_title || "Standard",
         price: `₹${parseFloat(item.unit_price).toLocaleString("en-IN")}`,
@@ -1124,7 +1122,7 @@ function OrdersSection({ onToast }: { onToast: (msg: string, t?: ToastType["type
                 {(order.status === "delivered" || order.status === "shipped") && (
                   <button className="btn-profile-primary" style={{ height: 38, fontSize: 13 }} onClick={() => setTrackingOrder(order)}>Track Order →</button>
                 )}
-                {order.status === "delivered" && <button className="btn-profile-outline" style={{ height: 38, fontSize: 13 }} onClick={() => onToast("Review submitted! Thank you.", "success")}>Write a Review</button>}
+                {order.status === "delivered" && <button className="btn-profile-outline" style={{ height: 38, fontSize: 13 }} onClick={() => setPendingReviewOrder(order)}>Write a Review</button>}
                 <button className="btn-profile-outline" style={{ height: 38, fontSize: 13 }} onClick={() => onToast("Items added to cart!", "success")}>Buy Again</button>
                 {order.status === "delivered" && <button style={{ background: "none", border: "none", color: "var(--profile-danger-text)", fontSize: 13, cursor: "pointer", fontFamily: "Outfit", fontWeight: 500, padding: "0 8px" }} onClick={() => handleReturnOrder(order.uuid)}>Return / Exchange</button>}
                 {[
@@ -1178,6 +1176,19 @@ function OrdersSection({ onToast }: { onToast: (msg: string, t?: ToastType["type
           </div>
         </Modal>
       )}
+      {/* Write Review Modal */}
+      <WriteReviewModal
+        isOpen={!!pendingReviewOrder}
+        onClose={() => setPendingReviewOrder(null)}
+        items={(pendingReviewOrder?.items ?? []).map((it: any) => ({
+          product_id: it.product_id,
+          order_item_id: it.order_item_id,
+          title: it.name,
+          variant_title: it.variant,
+          image_url: it.imageUrl ?? null,
+        }))}
+        onResult={(msg, type) => onToast(msg, type)}
+      />
     </section>
   );
 }
@@ -1902,64 +1913,220 @@ function PaymentSection({ onToast }: { onToast: (msg: string, t?: ToastType["typ
    SECTION: REVIEWS
 ───────────────────────────────────────────── */
 function ReviewsSection({ onToast }: { onToast: (msg: string, t?: ToastType["type"]) => void }) {
-  const [tab, setTab] = useState<"written" | "pending">("written");
+  const { data: myReviews = [], isLoading } = useMyReviews();
+  const submitReviewMutation = useSubmitReview();
+  const editReviewMutation = useEditReview();
+  const deleteReviewMutation = useDeleteReview();
+
+  const [tab, setTab] = useState<"published" | "pending" | "rejected">("published");
   const [showModal, setShowModal] = useState(false);
-  const [reviewProduct, setReviewProduct] = useState("");
-  const [rating, setRating] = useState(0);
+  const [editingReviewUuid, setEditingReviewUuid] = useState<string | null>(null);
+  const [reviewTitle, setReviewTitle] = useState("");
+  const [rating, setRating] = useState(5);
   const [reviewText, setReviewText] = useState("");
+
+  const publishedReviews = myReviews.filter((r) => r.status === "published");
+  const pendingReviews = myReviews.filter((r) => r.status === "pending");
+  const rejectedReviews = myReviews.filter((r) => r.status === "rejected" || r.status === "hidden");
+
+  const activeList =
+    tab === "published"
+      ? publishedReviews
+      : tab === "pending"
+      ? pendingReviews
+      : rejectedReviews;
+
+  const handleSubmit = async () => {
+    if (!rating) {
+      onToast("Please select a star rating.", "error");
+      return;
+    }
+    if (editingReviewUuid) {
+      try {
+        await editReviewMutation.mutateAsync({
+          reviewUuid: editingReviewUuid,
+          payload: { rating, title: reviewTitle, body: reviewText },
+        });
+        onToast("Review updated successfully!", "success");
+        setShowModal(false);
+      } catch (err: any) {
+        onToast(err?.response?.data?.detail || "Could not update review.", "error");
+      }
+    }
+  };
+
+  const handleDelete = async (uuid: string) => {
+    try {
+      await deleteReviewMutation.mutateAsync(uuid);
+      onToast("Review deleted.", "info");
+    } catch (err: any) {
+      onToast("Could not delete review.", "error");
+    }
+  };
+
   return (
     <section aria-label="My Reviews" style={{ animation: "slideUp var(--motion-normal) ease" }}>
       <div className="section-hdr">
-        <h2 className="section-title-lg">My Reviews <span className="section-count">({REVIEWS_WRITTEN.length + REVIEWS_PENDING.length})</span></h2>
+        <h2 className="section-title-lg">
+          My Reviews <span className="section-count">({myReviews.length})</span>
+        </h2>
       </div>
+
       {/* Tabs */}
       <div className="filter-tabs" role="tablist" style={{ marginBottom: 20 }}>
-        <button className={`filter-tab ${tab === "written" ? "active" : ""}`} role="tab" aria-selected={tab === "written"} onClick={() => setTab("written")}>Written ({REVIEWS_WRITTEN.length})</button>
-        <button className={`filter-tab ${tab === "pending" ? "active" : ""}`} role="tab" aria-selected={tab === "pending"} onClick={() => setTab("pending")}>Pending ({REVIEWS_PENDING.length})</button>
+        <button
+          className={`filter-tab ${tab === "published" ? "active" : ""}`}
+          role="tab"
+          aria-selected={tab === "published"}
+          onClick={() => setTab("published")}
+        >
+          Published ({publishedReviews.length})
+        </button>
+        <button
+          className={`filter-tab ${tab === "pending" ? "active" : ""}`}
+          role="tab"
+          aria-selected={tab === "pending"}
+          onClick={() => setTab("pending")}
+        >
+          Pending Moderation ({pendingReviews.length})
+        </button>
+        <button
+          className={`filter-tab ${tab === "rejected" ? "active" : ""}`}
+          role="tab"
+          aria-selected={tab === "rejected"}
+          onClick={() => setTab("rejected")}
+        >
+          Rejected ({rejectedReviews.length})
+        </button>
       </div>
-      {tab === "written" && (
+
+      {isLoading ? (
+        <p style={{ color: "var(--profile-meta)", fontSize: 14 }}>Loading your reviews...</p>
+      ) : activeList.length === 0 ? (
+        <div className="profile-card" style={{ textAlign: "center", padding: "36px 20px" }}>
+          <p style={{ fontSize: 15, fontWeight: 600, color: "var(--profile-heading)", marginBottom: 4 }}>
+            No reviews in this status
+          </p>
+          <p style={{ fontSize: 13, color: "var(--profile-meta)" }}>
+            Reviews submitted after delivered orders will appear here.
+          </p>
+        </div>
+      ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          {REVIEWS_WRITTEN.map(review => (
+          {activeList.map((review) => (
             <div key={review.id} className="profile-card">
               <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
-                <div style={{ width: 56, height: 56, borderRadius: "var(--radius-sm)", background: "rgba(0,181,102,0.06)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, flexShrink: 0, border: "1px solid var(--profile-divider)" }}>{review.img}</div>
+                <div
+                  style={{
+                    width: 56,
+                    height: 56,
+                    borderRadius: "var(--radius-sm)",
+                    background: "rgba(0,181,102,0.06)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: 24,
+                    flexShrink: 0,
+                    border: "1px solid var(--profile-divider)",
+                    overflow: "hidden"
+                  }}
+                >
+                  {review.product?.image_url ? (
+                    <img src={review.product.image_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  ) : (
+                    "🌿"
+                  )}
+                </div>
                 <div style={{ flex: 1 }}>
-                  <p style={{ fontSize: 15, fontWeight: 600, color: "var(--profile-heading)", marginBottom: 6 }}>{review.product}</p>
+                  <p style={{ fontSize: 15, fontWeight: 600, color: "var(--profile-heading)", marginBottom: 6 }}>
+                    {review.product?.title || "Plant Review"}
+                  </p>
                   <StarRating value={review.rating} size={18} />
-                  <p style={{ fontSize: 9, color: "var(--profile-meta)", marginTop: 4 }}>Ordered: {review.ordered}</p>
+                  <p style={{ fontSize: 10, color: "var(--profile-meta)", marginTop: 4 }}>
+                    Submitted: {new Date(review.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                    {review.is_edited && " (Edited)"}
+                  </p>
                 </div>
               </div>
-              <p style={{ fontSize: 14, color: "var(--profile-body)", lineHeight: 1.6, marginTop: 12, fontStyle: "italic" }}>&ldquo;{review.text}&rdquo;</p>
-              <div style={{ display: "flex", gap: 10, marginTop: 14 }}>
-                <button className="btn-profile-outline" style={{ height: 34, fontSize: 13 }} onClick={() => { setReviewProduct(review.product); setRating(review.rating); setReviewText(review.text); setShowModal(true); }}>Edit Review</button>
-                <button style={{ background: "none", border: "none", color: "var(--profile-danger-text)", fontSize: 13, cursor: "pointer", fontFamily: "Outfit" }} onClick={() => onToast("Review deleted", "info")}>Delete Review</button>
+
+              {review.title && (
+                <p style={{ fontSize: 14, fontWeight: 600, color: "var(--profile-heading)", marginTop: 10 }}>
+                  {review.title}
+                </p>
+              )}
+
+              {review.body && (
+                <p style={{ fontSize: 14, color: "var(--profile-body)", lineHeight: 1.6, marginTop: 6, fontStyle: "italic" }}>
+                  &ldquo;{review.body}&rdquo;
+                </p>
+              )}
+
+              {review.admin_reply && (
+                <div
+                  style={{
+                    background: "rgba(0,181,102,0.08)",
+                    borderLeft: "3px solid var(--profile-cta-bg)",
+                    padding: "10px 14px",
+                    borderRadius: "0 var(--radius-sm) var(--radius-sm) 0",
+                    marginTop: 10,
+                  }}
+                >
+                  <p style={{ fontSize: 12, fontWeight: 700, color: "var(--profile-sidebar-active-text)", marginBottom: 2 }}>
+                    🏪 Store Reply:
+                  </p>
+                  <p style={{ fontSize: 13, color: "var(--profile-body)", margin: 0 }}>
+                    {review.admin_reply}
+                  </p>
+                </div>
+              )}
+
+              <div style={{ display: "flex", gap: 12, marginTop: 14, alignItems: "center" }}>
+                {review.can_edit ? (
+                  <button
+                    className="btn-profile-outline"
+                    style={{ height: 34, fontSize: 13 }}
+                    onClick={() => {
+                      setEditingReviewUuid(review.uuid);
+                      setReviewTitle(review.title || "");
+                      setRating(review.rating);
+                      setReviewText(review.body || "");
+                      setShowModal(true);
+                    }}
+                  >
+                    Edit Review ({review.days_left_to_edit}d left)
+                  </button>
+                ) : (
+                  <span style={{ fontSize: 11, color: "var(--profile-meta)" }}>Edit window expired (30d)</span>
+                )}
+                <button
+                  style={{ background: "none", border: "none", color: "var(--profile-danger-text)", fontSize: 13, cursor: "pointer", fontFamily: "Outfit" }}
+                  onClick={() => handleDelete(review.uuid)}
+                >
+                  Delete Review
+                </button>
               </div>
             </div>
           ))}
         </div>
       )}
-      {tab === "pending" && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          {REVIEWS_PENDING.map(p => (
-            <div key={p.id} className="profile-card">
-              <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
-                <div style={{ width: 56, height: 56, borderRadius: "var(--radius-sm)", background: "rgba(0,181,102,0.06)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, border: "1px solid var(--profile-divider)" }}>{p.img}</div>
-                <div style={{ flex: 1 }}>
-                  <p style={{ fontSize: 15, fontWeight: 600, color: "var(--profile-heading)", marginBottom: 4 }}>{p.product}</p>
-                  <p style={{ fontSize: 9, color: "var(--profile-meta)" }}>Ordered: {p.ordered}</p>
-                  <p style={{ fontSize: 13, color: "var(--profile-meta)", marginTop: 8 }}>How was this plant?</p>
-                  <StarRating value={0} onChange={setRating} size={24} />
-                </div>
-              </div>
-              <button className="btn-profile-primary" style={{ marginTop: 14, height: 38, fontSize: 14 }} onClick={() => { setReviewProduct(p.product); setRating(0); setReviewText(""); setShowModal(true); }}>Write a Review</button>
-            </div>
-          ))}
-        </div>
-      )}
-      {/* Review Modal */}
+
+      {/* Edit Review Modal */}
       {showModal && (
-        <Modal title={`Review: ${reviewProduct}`} onClose={() => setShowModal(false)} maxWidth={560}
-          footer={<><button type="button" className="btn-profile-outline" onClick={() => setShowModal(false)} style={{ flex: 1, justifyContent: "center" }}>Cancel</button><button type="button" className="btn-profile-primary" style={{ flex: 1, justifyContent: "center" }} onClick={() => { setShowModal(false); onToast("Review submitted! Thank you ⭐", "success"); }}>Submit Review</button></>}>
+        <Modal
+          title="Edit Review"
+          onClose={() => setShowModal(false)}
+          maxWidth={560}
+          footer={
+            <>
+              <button type="button" className="btn-profile-outline" onClick={() => setShowModal(false)} style={{ flex: 1, justifyContent: "center" }}>
+                Cancel
+              </button>
+              <button type="button" className="btn-profile-primary" style={{ flex: 1, justifyContent: "center" }} onClick={handleSubmit}>
+                Save Changes
+              </button>
+            </>
+          }
+        >
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             <div>
               <label style={{ display: "block", fontSize: 15, fontWeight: 600, color: "var(--profile-heading)", marginBottom: 8 }}>Rating *</label>
@@ -1967,16 +2134,24 @@ function ReviewsSection({ onToast }: { onToast: (msg: string, t?: ToastType["typ
             </div>
             <div>
               <label style={{ display: "block", fontSize: 15, fontWeight: 600, color: "var(--profile-heading)", marginBottom: 6 }}>Review Title</label>
-              <input className="profile-input" placeholder="Great plant!" />
+              <input
+                className="profile-input"
+                value={reviewTitle}
+                onChange={(e) => setReviewTitle(e.target.value)}
+                placeholder="Great plant!"
+              />
             </div>
             <div>
               <label style={{ display: "block", fontSize: 15, fontWeight: 600, color: "var(--profile-heading)", marginBottom: 6 }}>Your Review *</label>
-              <textarea className="profile-textarea" value={reviewText} onChange={e => setReviewText(e.target.value)} placeholder="Arrived in perfect condition..." minLength={50} maxLength={2000} style={{ minHeight: 120 }} />
-              <p style={{ fontSize: 9, textAlign: "right", color: reviewText.length >= 1600 ? "var(--profile-status-processing)" : "var(--profile-meta)", marginTop: 4 }}>50–2000 characters · {reviewText.length} / 2000</p>
-            </div>
-            <div>
-              <label style={{ display: "block", fontSize: 15, fontWeight: 600, color: "var(--profile-heading)", marginBottom: 6 }}>Add Photos (optional)</label>
-              <button type="button" className="btn-profile-outline" style={{ fontSize: 13 }}>📷 Add up to 3 photos</button>
+              <textarea
+                className="profile-textarea"
+                value={reviewText}
+                onChange={(e) => setReviewText(e.target.value)}
+                placeholder="Arrived in perfect condition..."
+                minLength={10}
+                maxLength={2000}
+                style={{ minHeight: 120 }}
+              />
             </div>
           </div>
         </Modal>

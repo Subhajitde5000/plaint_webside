@@ -11,6 +11,7 @@ import {
   REPLY_TEMPLATES,
   countByStatus,
 } from "./data";
+import { useAdminReviews, useAdminReviewStats, useAdminReviewActions } from "@/features/admin-reviews";
 
 /* ─── Design Tokens ─────────────────────────────────────────────────────────── */
 const T = {
@@ -853,7 +854,6 @@ const PAGE_SIZE = 10;
 type TabStatus = "pending" | "all" | "published" | "rejected" | "flagged";
 
 export default function AdminReviewsPage() {
-  const [reviews, setReviews] = useState<Review[]>(MOCK_REVIEWS);
   const [activeTab, setActiveTab] = useState<TabStatus>("pending");
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState("newest");
@@ -868,6 +868,17 @@ export default function AdminReviewsPage() {
   const [sortOpen, setSortOpen] = useState(false);
   const toastIdRef = useRef(0);
 
+  const { data: statsData } = useAdminReviewStats();
+  const { data: listData, isLoading } = useAdminReviews({
+    page: currentPage,
+    pageSize: PAGE_SIZE,
+    status: activeTab === "all" ? undefined : activeTab,
+    q: searchQuery,
+    sort: sortBy,
+  });
+
+  const actions = useAdminReviewActions();
+
   /* --- Helpers --- */
   function addToast(text: string, type: ToastMsg["type"] = "success") {
     const id = ++toastIdRef.current;
@@ -875,40 +886,50 @@ export default function AdminReviewsPage() {
     setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 3500);
   }
 
-  /* --- Filtered / sorted reviews --- */
-  const filtered = useMemo(() => {
-    let r = reviews;
-    if (activeTab !== "all") r = r.filter((x) => x.status === activeTab || (activeTab === "flagged" && x.flagCount > 0));
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      r = r.filter(
-        (x) =>
-          x.reviewerName.toLowerCase().includes(q) ||
-          x.reviewerEmail.toLowerCase().includes(q) ||
-          x.productName.toLowerCase().includes(q) ||
-          x.body.toLowerCase().includes(q)
-      );
-    }
-    const sortMap: Record<string, (a: Review, b: Review) => number> = {
-      newest: (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-      oldest: (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
-      "highest-rating": (a, b) => b.rating - a.rating,
-      "lowest-rating": (a, b) => a.rating - b.rating,
-    };
-    return [...r].sort(sortMap[sortBy] ?? sortMap.newest);
-  }, [reviews, activeTab, searchQuery, sortBy]);
+  /* --- Mapped reviews from API --- */
+  const reviews: Review[] = useMemo(() => {
+    if (!listData?.items) return [];
+    return listData.items.map((item) => ({
+      id: item.uuid,
+      customerId: item.user_id ? `CUS-${item.user_id}` : "GUEST",
+      reviewerName: item.customer_name,
+      reviewerEmail: item.customer_email || "",
+      reviewerAvatar: item.customer_name ? item.customer_name.slice(0, 2).toUpperCase() : "U",
+      orderId: item.order_number || (item.order_id ? `ORD-${item.order_id}` : "N/A"),
+      productId: String(item.product_id),
+      productName: item.product_name,
+      productVariant: "Standard",
+      rating: item.rating,
+      title: item.title || "",
+      body: item.body || "",
+      photos: [],
+      status: item.status as ReviewStatus,
+      isVerifiedPurchase: item.is_verified_purchase,
+      isFeatured: item.is_featured,
+      adminReply: item.admin_reply || null,
+      adminReplyAt: null,
+      adminReplyBy: null,
+      flagCount: item.flag_count,
+      flags: [],
+      moderationHistory: [],
+      createdAt: item.created_at,
+      updatedAt: item.created_at,
+    }));
+  }, [listData]);
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const paginated = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+  const totalPages = listData?.pages || 1;
+  const totalCount = listData?.total || 0;
+  const filtered = reviews;
+  const paginated = reviews;
 
   /* --- Counts --- */
   const counts = useMemo(() => ({
-    pending: reviews.filter((r) => r.status === "pending").length,
-    all: reviews.length,
-    published: reviews.filter((r) => r.status === "published").length,
-    rejected: reviews.filter((r) => r.status === "rejected").length,
-    flagged: reviews.filter((r) => r.flagCount > 0).length,
-  }), [reviews]);
+    pending: statsData?.pending_reviews ?? 0,
+    all: statsData?.total_reviews ?? 0,
+    published: statsData?.approved_reviews ?? 0,
+    rejected: statsData?.rejected_reviews ?? 0,
+    flagged: statsData?.reported_reviews ?? 0,
+  }), [statsData]);
 
   /* --- Selection --- */
   function toggleSelect(id: string) {
@@ -927,68 +948,59 @@ export default function AdminReviewsPage() {
   }
 
   /* --- Actions --- */
-  function handleApprove(id: string) {
-    setReviews((prev) =>
-      prev.map((r) =>
-        r.id === id
-          ? { ...r, status: "published" as ReviewStatus, moderationHistory: [...r.moderationHistory, { action: "Approved & published", at: new Date().toISOString(), by: "Admin" }] }
-          : r
-      )
-    );
-    addToast("Review approved and published.");
-  }
-
-  function handleReject(id: string, reason: string, notify: boolean) {
-    setReviews((prev) =>
-      prev.map((r) =>
-        r.id === id
-          ? { ...r, status: "rejected" as ReviewStatus, moderationHistory: [...r.moderationHistory, { action: `Rejected (${reason})`, at: new Date().toISOString(), by: "Admin" }] }
-          : r
-      )
-    );
-    addToast("Review rejected." + (notify ? " Customer notified." : ""));
-  }
-
-  function handleReply(id: string, text: string) {
-    setReviews((prev) =>
-      prev.map((r) =>
-        r.id === id
-          ? { ...r, adminReply: text, adminReplyAt: new Date().toISOString(), adminReplyBy: "Admin", moderationHistory: [...r.moderationHistory, { action: "Admin reply posted", at: new Date().toISOString(), by: "Admin" }] }
-          : r
-      )
-    );
-    addToast("Reply posted.");
-  }
-
-  function handleFeatureToggle(id: string) {
-    setReviews((prev) =>
-      prev.map((r) =>
-        r.id === id
-          ? { ...r, isFeatured: !r.isFeatured, status: !r.isFeatured ? "featured" as ReviewStatus : "published" as ReviewStatus }
-          : r
-      )
-    );
-    const rev = reviews.find((r) => r.id === id);
-    addToast(rev?.isFeatured ? "Review removed from featured." : "Review featured on product page.");
-  }
-
-  function handleDelete(id: string) {
-    setReviews((prev) => prev.filter((r) => r.id !== id));
-    addToast("Review deleted permanently.", "info");
-  }
-
-  function handleBulkConfirm(extra?: { reason?: string; notify?: boolean; feature?: boolean }) {
-    const ids = Array.from(selectedIds);
-    if (bulkModal === "approve") {
-      ids.forEach((id) => handleApprove(id));
-      addToast(`${ids.length} review${ids.length > 1 ? "s" : ""} approved and published.`);
-    } else if (bulkModal === "reject") {
-      ids.forEach((id) => handleReject(id, extra?.reason ?? "", extra?.notify ?? false));
-      addToast(`${ids.length} review${ids.length > 1 ? "s" : ""} rejected.`);
-    } else if (bulkModal === "delete") {
-      setReviews((prev) => prev.filter((r) => !selectedIds.has(r.id)));
-      addToast(`${ids.length} review${ids.length > 1 ? "s" : ""} deleted permanently.`, "info");
+  async function handleApprove(uuid: string) {
+    try {
+      await actions.approve(uuid);
+      addToast("Review approved and published.");
+    } catch (err: any) {
+      addToast("Failed to approve review.", "error");
     }
+  }
+
+  async function handleReject(uuid: string, reason: string, notify: boolean) {
+    try {
+      await actions.reject({ uuid, reason });
+      addToast("Review rejected." + (notify ? " Customer notified." : ""));
+    } catch (err: any) {
+      addToast("Failed to reject review.", "error");
+    }
+  }
+
+  async function handleReply(uuid: string, text: string) {
+    try {
+      await actions.reply({ uuid, reply: text });
+      addToast("Reply posted.");
+    } catch (err: any) {
+      addToast("Failed to post reply.", "error");
+    }
+  }
+
+  async function handleFeatureToggle(uuid: string) {
+    try {
+      const res = await actions.pin(uuid);
+      addToast(res.is_featured ? "Review featured on product page." : "Review removed from featured.");
+    } catch (err: any) {
+      addToast("Failed to toggle pin state.", "error");
+    }
+  }
+
+  async function handleDelete(uuid: string) {
+    try {
+      await actions.deleteReview(uuid);
+      addToast("Review deleted permanently.", "info");
+    } catch (err: any) {
+      addToast("Failed to delete review.", "error");
+    }
+  }
+
+  async function handleBulkConfirm(extra?: { reason?: string; notify?: boolean; feature?: boolean }) {
+    const ids = Array.from(selectedIds);
+    for (const uuid of ids) {
+      if (bulkModal === "approve") await actions.approve(uuid);
+      else if (bulkModal === "reject") await actions.reject({ uuid, reason: extra?.reason || "Bulk rejected" });
+      else if (bulkModal === "delete") await actions.deleteReview(uuid);
+    }
+    addToast(`Bulk operation completed for ${ids.length} reviews.`);
     setSelectedIds(new Set());
     setBulkModal(null);
   }
@@ -1594,7 +1606,7 @@ export default function AdminReviewsPage() {
             flexWrap: "wrap", gap: 10,
           }}>
             <span style={{ fontSize: 13, color: T.muted }}>
-              Showing {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, filtered.length)} of {filtered.length}
+              Showing {totalCount > 0 ? (currentPage - 1) * PAGE_SIZE + 1 : 0}–{Math.min(currentPage * PAGE_SIZE, totalCount)} of {totalCount}
             </span>
             <div style={{ display: "flex", gap: 4 }}>
               <button

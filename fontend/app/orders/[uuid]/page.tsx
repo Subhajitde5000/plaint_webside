@@ -7,10 +7,11 @@ import SharedNavbar from "@/components/Navbar";
 import { useOrder } from "@/features/orders/hooks/useOrder";
 import { useCancelOrder } from "@/features/orders/hooks/useCancelOrder";
 import { useReturnOrder } from "@/features/orders/hooks/useReturnOrder";
+import WriteReviewModal from "@/components/WriteReviewModal";
 import {
   ORDER_STATUS_META, CANCELLABLE_STATUSES, RETURNABLE_STATUSES,
 } from "@/features/orders/types/order.types";
-import type { Order, OrderStatus } from "@/features/orders/types/order.types";
+import type { Order, OrderStatus, OrderItem } from "@/features/orders/types/order.types";
 
 /* ── Design tokens ──────────────────────────────────────────────────────── */
 const T = {
@@ -410,6 +411,7 @@ export default function OrderDetailPage() {
 
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [showReturnModal, setShowReturnModal] = useState(false);
+  const [showReviewModal, setShowReviewModal] = useState(false);
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
 
   const showToast = (msg: string, type: "success" | "error") => {
@@ -469,6 +471,18 @@ export default function OrderDetailPage() {
         onClose={() => setShowReturnModal(false)}
         onConfirm={handleReturn}
         isLoading={isRequesting}
+      />
+      <WriteReviewModal
+        isOpen={showReviewModal}
+        onClose={() => setShowReviewModal(false)}
+        items={orderItems.map((it) => ({
+          product_id: it.product_id,
+          order_item_id: it.id,
+          title: it.title,
+          variant_title: it.variant_title,
+          image_url: it.image_url,
+        }))}
+        onResult={showToast}
       />
 
       <div style={{ maxWidth: 800, margin: "0 auto", padding: "40px 16px 80px" }}>
@@ -772,13 +786,17 @@ export default function OrderDetailPage() {
                 ← All Orders
               </Link>
               {(["delivered", "completed"] as string[]).includes(order.status) && (
-                <Link href="/profile" id="btn-rate-products" style={{
-                  padding: "12px 24px", borderRadius: 10, border: `1.5px solid ${T.green}`,
-                  background: T.greenPale, fontWeight: 700, fontSize: 14, textDecoration: "none",
-                  color: T.green, display: "inline-block",
-                }}>
+                <button
+                  id="btn-rate-products"
+                  onClick={() => setShowReviewModal(true)}
+                  style={{
+                    padding: "12px 24px", borderRadius: 10, border: `1.5px solid ${T.green}`,
+                    background: T.greenPale, fontWeight: 700, fontSize: 14,
+                    color: T.green, cursor: "pointer",
+                  }}
+                >
                   ⭐ Rate Product
-                </Link>
+                </button>
               )}
               <Link href="/" id="btn-continue-shopping" style={{
                 padding: "12px 24px", borderRadius: 10, border: "none",

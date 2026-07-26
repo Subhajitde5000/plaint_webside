@@ -8,6 +8,7 @@ import { useProduct } from "@/features/products/hooks/useProduct";
 import { useProducts } from "@/features/products/hooks/useProducts";
 import { useCart } from "@/features/cart/hooks/useCart";
 import { useCheckoutStore } from "@/store/checkout.store";
+import { useProductReviews, useVoteHelpful, useReportReview } from "@/features/reviews";
 
 /* ═══════════════════════════════════════════════════
    SVG ICONS
@@ -388,6 +389,27 @@ export default function ProductDetailPage({ params }: PageProps) {
   const [toastMsg, setToastMsg] = useState("Added to cart!");
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const [reviewSort, setReviewSort] = useState<"newest" | "helpful" | "highest_rating" | "lowest_rating">("newest");
+  const [reviewStarFilter, setReviewStarFilter] = useState<number | undefined>(undefined);
+  const [reviewWithImages, setReviewWithImages] = useState<boolean | undefined>(undefined);
+  const [reviewVerifiedOnly, setReviewVerifiedOnly] = useState<boolean | undefined>(undefined);
+
+  // Report Modal state variables
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [reportTargetReviewId, setReportTargetReviewId] = useState<number | null>(null);
+  const [reportReason, setReportReason] = useState("spam");
+  const [reportNotes, setReportNotes] = useState("");
+
+  const { data: reviewsData, isLoading: isReviewsLoading } = useProductReviews(product?.id, {
+    sort: reviewSort,
+    rating: reviewStarFilter,
+    withImages: reviewWithImages,
+    verifiedOnly: reviewVerifiedOnly,
+  });
+
+  const voteHelpfulMutation = useVoteHelpful();
+  const reportReviewMutation = useReportReview();
+
   // Reset selected size when product changes
   useEffect(() => {
     setSelectedSize(0);
@@ -541,7 +563,6 @@ export default function ProductDetailPage({ params }: PageProps) {
       images,
       pots,
       careGuide,
-      reviews: MOCK_REVIEWS,
       relatedProducts: related.length > 0 ? related : MOCK_RELATED_PRODUCTS
     };
   }, [product, relatedData]);
@@ -1435,80 +1456,220 @@ export default function ProductDetailPage({ params }: PageProps) {
           {/* Reviews tab */}
           {activeTab === "reviews" && (
             <div>
-              {/* Header */}
-              <div style={{ display: "flex", gap: "48px", flexWrap: "wrap", marginBottom: "36px" }}>
-                <div style={{ textAlign: "center" }}>
-                  <div style={{ fontFamily: "'Playfair Display', serif", fontWeight: 800, fontSize: "64px", color: "var(--color-green-dark)", lineHeight: 1 }}>
-                    {p.rating}
+              {/* Rating Distribution Header */}
+              <div style={{ display: "flex", gap: "48px", flexWrap: "wrap", marginBottom: "32px", background: "white", padding: "28px", borderRadius: "var(--radius-xl)", boxShadow: "var(--shadow-card)" }}>
+                <div style={{ textAlign: "center", minWidth: "140px" }}>
+                  <div style={{ fontFamily: "'Playfair Display', serif", fontWeight: 800, fontSize: "56px", color: "var(--color-green-dark)", lineHeight: 1 }}>
+                    {reviewsData?.distribution?.average ?? p.rating}
                   </div>
                   <div style={{ display: "flex", justifyContent: "center", gap: "2px", margin: "8px 0 4px" }}>
-                    {[1,2,3,4,5].map((s) => <StarIcon key={s} filled={s <= Math.round(p.rating)} />)}
+                    {[1, 2, 3, 4, 5].map((s) => (
+                      <StarIcon key={s} filled={s <= Math.round(reviewsData?.distribution?.average ?? p.rating)} />
+                    ))}
                   </div>
                   <div style={{ fontFamily: "DM Sans, sans-serif", fontSize: "13px", color: "var(--color-text-secondary)" }}>
-                    {p.reviewCount} reviews
+                    Based on {reviewsData?.distribution?.total_reviews ?? 0} Reviews
                   </div>
                 </div>
-                <div style={{ flex: 1, minWidth: "200px" }}>
-                  <StarBar count={5} total={280} pct={82} />
-                  <StarBar count={4} total={45} pct={13} />
-                  <StarBar count={3} total={12} pct={4} />
-                  <StarBar count={2} total={3} pct={1} />
-                  <StarBar count={1} total={2} pct={0.5} />
+                <div style={{ flex: 1, minWidth: "220px" }}>
+                  {[5, 4, 3, 2, 1].map((star) => {
+                    const total = reviewsData?.distribution?.total_reviews || 1;
+                    const count = (reviewsData?.distribution as any)?.[`star_${star}`] || 0;
+                    const pct = Math.round((count / total) * 100);
+                    return <StarBar key={star} count={star} total={count} pct={pct} />;
+                  })}
                 </div>
               </div>
 
-              {/* Review cards */}
-              <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-                {p.reviews.map((rev) => (
-                  <div key={rev.name} style={{
-                    background: "white", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-card)",
-                    padding: "24px",
-                  }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "10px", marginBottom: "12px" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                        <div style={{
-                          width: "44px", height: "44px", borderRadius: "50%",
-                          background: "var(--color-green-pale)", color: "var(--color-green-dark)",
-                          display: "flex", alignItems: "center", justifyContent: "center",
-                          fontFamily: "Poppins, sans-serif", fontWeight: 700, fontSize: "16px",
-                        }}>
-                          {rev.initials}
-                        </div>
-                        <div>
-                          <div style={{ fontFamily: "Poppins, sans-serif", fontWeight: 600, fontSize: "14px", color: "var(--color-text-primary)" }}>{rev.name}</div>
-                          <div style={{ fontFamily: "DM Sans, sans-serif", fontSize: "12px", color: "var(--color-text-secondary)" }}>{rev.location} · {rev.date}</div>
-                        </div>
-                      </div>
-                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                        <div style={{ display: "flex", gap: "2px" }}>
-                          {[1,2,3,4,5].map((s) => <StarIcon key={s} filled={s <= rev.rating} />)}
-                        </div>
-                        {rev.verified && (
-                          <span style={{
-                            background: "var(--color-green-pale)", color: "var(--color-green-dark)",
-                            fontFamily: "Poppins, sans-serif", fontWeight: 600, fontSize: "10px",
-                            padding: "2px 8px", borderRadius: "var(--radius-full)",
-                          }}>✓ Verified</span>
-                        )}
-                      </div>
-                    </div>
-                    <p style={{ fontFamily: "DM Sans, sans-serif", fontSize: "14px", color: "var(--color-text-primary)", lineHeight: 1.7 }}>
-                      {rev.text}
-                    </p>
-                    <button style={{
-                      background: "none", border: "none", cursor: "pointer",
-                      fontFamily: "Poppins, sans-serif", fontWeight: 500, fontSize: "12px",
-                      color: "var(--color-text-secondary)", marginTop: "12px", padding: 0,
-                      display: "flex", alignItems: "center", gap: "4px",
-                      transition: "color 0.2s",
-                    }}
-                      onMouseEnter={(e) => (e.currentTarget.style.color = "var(--color-green-dark)")}
-                      onMouseLeave={(e) => (e.currentTarget.style.color = "var(--color-text-secondary)")}
+              {/* Filters & Sort Controls */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px", marginBottom: "24px" }}>
+                <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
+                  <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text-secondary)", fontFamily: "Poppins" }}>Filter:</span>
+                  {[
+                    { label: "All", value: undefined },
+                    { label: "5 ★", value: 5 },
+                    { label: "4 ★", value: 4 },
+                    { label: "3 ★", value: 3 },
+                    { label: "2 ★", value: 2 },
+                    { label: "1 ★", value: 1 },
+                  ].map((item) => (
+                    <button
+                      key={item.label}
+                      onClick={() => setReviewStarFilter(item.value)}
+                      style={{
+                        padding: "6px 14px", borderRadius: "var(--radius-full)", fontSize: "12px", fontFamily: "Poppins", fontWeight: 600,
+                        border: reviewStarFilter === item.value ? "none" : "1px solid var(--color-border-light)",
+                        background: reviewStarFilter === item.value ? "var(--color-green-dark)" : "white",
+                        color: reviewStarFilter === item.value ? "white" : "var(--color-text-primary)",
+                        cursor: "pointer", transition: "all 0.2s"
+                      }}
                     >
-                      👍 Helpful
+                      {item.label}
                     </button>
+                  ))}
+                  <button
+                    onClick={() => setReviewWithImages(!reviewWithImages)}
+                    style={{
+                      padding: "6px 14px", borderRadius: "var(--radius-full)", fontSize: "12px", fontFamily: "Poppins", fontWeight: 600,
+                      border: reviewWithImages ? "none" : "1px solid var(--color-border-light)",
+                      background: reviewWithImages ? "var(--color-green-dark)" : "white",
+                      color: reviewWithImages ? "white" : "var(--color-text-primary)",
+                      cursor: "pointer", transition: "all 0.2s"
+                    }}
+                  >
+                    📷 With Images
+                  </button>
+                </div>
+
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text-secondary)", fontFamily: "Poppins" }}>Sort by:</span>
+                  <select
+                    value={reviewSort}
+                    onChange={(e) => setReviewSort(e.target.value as any)}
+                    style={{
+                      padding: "6px 12px", borderRadius: "var(--radius-sm)", border: "1px solid var(--color-border-light)",
+                      fontFamily: "Poppins", fontSize: "12px", color: "var(--color-text-primary)", background: "white"
+                    }}
+                  >
+                    <option value="newest">Newest</option>
+                    <option value="helpful">Most Helpful</option>
+                    <option value="highest_rating">Highest Rating</option>
+                    <option value="lowest_rating">Lowest Rating</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Review Cards */}
+              <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+                {isReviewsLoading ? (
+                  <p style={{ textAlign: "center", padding: "32px", color: "var(--color-text-secondary)", fontFamily: "DM Sans" }}>Loading reviews...</p>
+                ) : !reviewsData?.items || reviewsData.items.length === 0 ? (
+                  <div style={{ background: "white", padding: "40px", borderRadius: "var(--radius-lg)", textAlign: "center" }}>
+                    <p style={{ fontFamily: "Poppins", fontWeight: 600, fontSize: "16px", color: "var(--color-text-primary)", marginBottom: "4px" }}>No reviews match your filters yet</p>
+                    <p style={{ fontFamily: "DM Sans", fontSize: "14px", color: "var(--color-text-secondary)" }}>Be the first to review this plant after receiving your order!</p>
                   </div>
-                ))}
+                ) : (
+                  reviewsData.items.map((rev) => {
+                    const initials = rev.reviewer_name
+                      ? rev.reviewer_name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)
+                      : "U";
+                    const formattedDate = new Date(rev.created_at).toLocaleDateString("en-IN", { month: "short", year: "numeric" });
+
+                    return (
+                      <div key={rev.id} style={{ background: "white", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-card)", padding: "24px" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "10px", marginBottom: "12px" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                            <div style={{
+                              width: "44px", height: "44px", borderRadius: "50%",
+                              background: "var(--color-green-pale)", color: "var(--color-green-dark)",
+                              display: "flex", alignItems: "center", justifyContent: "center",
+                              fontFamily: "Poppins, sans-serif", fontWeight: 700, fontSize: "16px",
+                            }}>
+                              {initials}
+                            </div>
+                            <div>
+                              <div style={{ fontFamily: "Poppins, sans-serif", fontWeight: 600, fontSize: "14px", color: "var(--color-text-primary)" }}>{rev.reviewer_name}</div>
+                              <div style={{ fontFamily: "DM Sans, sans-serif", fontSize: "12px", color: "var(--color-text-secondary)" }}>
+                                {formattedDate} {rev.is_edited && <span style={{ fontStyle: "italic", marginLeft: "4px" }}>(Edited)</span>}
+                              </div>
+                            </div>
+                          </div>
+                          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                            <div style={{ display: "flex", gap: "2px" }}>
+                              {[1, 2, 3, 4, 5].map((s) => <StarIcon key={s} filled={s <= rev.rating} />)}
+                            </div>
+                            {rev.is_verified_purchase && (
+                              <span style={{
+                                background: "var(--color-green-pale)", color: "var(--color-green-dark)",
+                                fontFamily: "Poppins, sans-serif", fontWeight: 600, fontSize: "10px",
+                                padding: "2px 8px", borderRadius: "var(--radius-full)",
+                              }}>✓ Verified Purchase</span>
+                            )}
+                          </div>
+                        </div>
+
+                        {rev.title && (
+                          <h4 style={{ fontFamily: "Poppins, sans-serif", fontWeight: 700, fontSize: "15px", color: "var(--color-text-primary)", marginBottom: "6px" }}>
+                            {rev.title}
+                          </h4>
+                        )}
+
+                        {rev.body && (
+                          <p style={{ fontFamily: "DM Sans, sans-serif", fontSize: "14px", color: "var(--color-text-primary)", lineHeight: 1.7, marginBottom: "12px" }}>
+                            {rev.body}
+                          </p>
+                        )}
+
+                        {/* Media Photos */}
+                        {rev.photos && rev.photos.length > 0 && (
+                          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "12px" }}>
+                            {rev.photos.map((p, idx) => (
+                              <img
+                                key={idx}
+                                src={p.url}
+                                alt={`Review photo ${idx + 1}`}
+                                style={{ width: "80px", height: "80px", objectFit: "cover", borderRadius: "var(--radius-sm)", border: "1px solid var(--color-border-light)" }}
+                              />
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Store Reply */}
+                        {rev.admin_reply && (
+                          <div style={{ background: "#F4F7F4", borderLeft: "4px solid var(--color-green-dark)", padding: "14px 18px", borderRadius: "0 var(--radius-md) var(--radius-md) 0", margin: "14px 0" }}>
+                            <div style={{ fontFamily: "Poppins, sans-serif", fontWeight: 700, fontSize: "12px", color: "var(--color-green-dark)", marginBottom: "4px" }}>
+                              🏪 Hero Plant Store Reply
+                            </div>
+                            <p style={{ fontFamily: "DM Sans, sans-serif", fontSize: "13px", color: "var(--color-text-primary)", margin: 0 }}>
+                              {rev.admin_reply}
+                            </p>
+                          </div>
+                        )}
+
+                        {/* Card Actions */}
+                        <div style={{ display: "flex", gap: "16px", alignItems: "center", marginTop: "12px" }}>
+                          <button
+                            onClick={() => {
+                              voteHelpfulMutation.mutate(
+                                { reviewId: rev.id, helpful: true },
+                                {
+                                  onSuccess: (data) => showToast(data.message),
+                                  onError: () => showToast("Please log in to vote.")
+                                }
+                              );
+                            }}
+                            style={{
+                              background: rev.user_voted_helpful === true ? "var(--color-green-pale)" : "none",
+                              border: "none", cursor: "pointer",
+                              fontFamily: "Poppins, sans-serif", fontWeight: 600, fontSize: "12px",
+                              color: rev.user_voted_helpful === true ? "var(--color-green-dark)" : "var(--color-text-secondary)",
+                              padding: "4px 10px", borderRadius: "var(--radius-full)",
+                              display: "flex", alignItems: "center", gap: "4px", transition: "all 0.2s"
+                            }}
+                          >
+                            👍 Helpful ({rev.helpful_count})
+                          </button>
+
+                          <button
+                            onClick={() => {
+                              setReportTargetReviewId(rev.id);
+                              setReportReason("spam");
+                              setReportNotes("");
+                              setShowReportModal(true);
+                            }}
+                            style={{
+                              background: "none", border: "none", cursor: "pointer",
+                              fontFamily: "Poppins, sans-serif", fontWeight: 500, fontSize: "12px",
+                              color: "var(--color-text-secondary)", padding: 0
+                            }}
+                          >
+                            🚩 Report
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
               </div>
             </div>
           )}
@@ -1643,6 +1804,116 @@ export default function ProductDetailPage({ params }: PageProps) {
           </div>
         </div>
       </div>
+
+      {/* Report Review Modal */}
+      {showReportModal && reportTargetReviewId !== null && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 1200,
+          background: "rgba(0,0,0,0.45)", backdropFilter: "blur(4px)",
+          display: "flex", alignItems: "center", justifyContent: "center", padding: 16,
+        }}
+          onClick={() => setShowReportModal(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: "#fff", borderRadius: 16, padding: "28px 28px 24px",
+              width: "100%", maxWidth: 440,
+              boxShadow: "0 24px 64px rgba(0,0,0,0.18)",
+              fontFamily: "Poppins, sans-serif",
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "var(--color-green-dark)" }}>🚩 Report Review</h3>
+              <button
+                onClick={() => setShowReportModal(false)}
+                style={{ background: "none", border: "none", cursor: "pointer", fontSize: 20, color: "var(--color-text-secondary)" }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-secondary)", display: "block", marginBottom: 8 }}>
+                Reason for Reporting
+              </label>
+              <select
+                value={reportReason}
+                onChange={(e) => setReportReason(e.target.value)}
+                style={{
+                  width: "100%", padding: "10px 12px", borderRadius: 8,
+                  border: "1.5px solid rgba(45,90,39,0.20)", fontSize: 14,
+                  color: "var(--color-text-primary)", fontFamily: "inherit",
+                  outline: "none", background: "#fff"
+                }}
+              >
+                <option value="spam">Spam / Advertising</option>
+                <option value="fake_review">Fake / Disingenuous Review</option>
+                <option value="offensive">Offensive / Inappropriate Content</option>
+                <option value="wrong_product">Review for Wrong Product</option>
+                <option value="other">Other Reason</option>
+              </select>
+            </div>
+
+            <div style={{ marginBottom: 20 }}>
+              <label style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-secondary)", display: "block", marginBottom: 6 }}>
+                Additional details (optional)
+              </label>
+              <textarea
+                value={reportNotes}
+                onChange={(e) => setReportNotes(e.target.value)}
+                placeholder="Help us understand the issue..."
+                rows={3}
+                style={{
+                  width: "100%", padding: "10px 12px", borderRadius: 8,
+                  border: "1.5px solid rgba(45,90,39,0.20)", fontSize: 13,
+                  resize: "vertical", fontFamily: "inherit", outline: "none",
+                  boxSizing: "border-box"
+                }}
+              />
+            </div>
+
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+              <button
+                onClick={() => setShowReportModal(false)}
+                style={{
+                  padding: "10px 20px", borderRadius: 8, border: "1.5px solid rgba(45,90,39,0.20)",
+                  background: "transparent", fontWeight: 600, fontSize: 14, cursor: "pointer",
+                  color: "var(--color-text-secondary)", fontFamily: "inherit"
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                disabled={reportReviewMutation.isPending}
+                onClick={() => {
+                  reportReviewMutation.mutate(
+                    { reviewId: reportTargetReviewId, reason: reportReason, notes: reportNotes },
+                    {
+                      onSuccess: (data) => {
+                        showToast(data.message);
+                        setShowReportModal(false);
+                      },
+                      onError: (err: any) => {
+                        showToast(err?.response?.data?.detail || "Could not report review.");
+                      }
+                    }
+                  );
+                }}
+                style={{
+                  padding: "10px 20px", borderRadius: 8, border: "none",
+                  background: reportReviewMutation.isPending ? "#e5e7eb" : "var(--color-green-dark)",
+                  color: reportReviewMutation.isPending ? "var(--color-text-secondary)" : "#fff",
+                  fontWeight: 700, fontSize: 14, cursor: reportReviewMutation.isPending ? "default" : "pointer",
+                  fontFamily: "inherit"
+                }}
+              >
+                {reportReviewMutation.isPending ? "Reporting..." : "Submit Report"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Toast */}
       <Toast message={toastMsg} visible={toastVisible} />

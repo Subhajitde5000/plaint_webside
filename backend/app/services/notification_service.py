@@ -169,3 +169,36 @@ class NotificationService:
             template_id="password_reset",
             props={"first_name": name, "reset_token": token},
         )
+
+    async def review_published(self, user, review):
+        if not user or not user.email: return
+        await self.send_email(
+            to_email=user.email,
+            template_id="review_published",
+            props={"first_name": user.first_name, "review_title": review.title or "Your Review"},
+        )
+
+    async def review_rejected(self, user, review):
+        if not user or not user.email: return
+        await self.send_email(
+            to_email=user.email,
+            template_id="review_rejected",
+            props={"first_name": user.first_name, "reason": review.rejection_reason or "Does not meet guidelines"},
+        )
+
+    async def review_replied(self, user, review):
+        if not user or not user.email: return
+        await self.send_email(
+            to_email=user.email,
+            template_id="review_replied",
+            props={"first_name": user.first_name, "reply": review.admin_reply},
+        )
+
+    async def review_helpful_milestone(self, user, review, count: int):
+        if not user or not user.email: return
+        await self.send_email(
+            to_email=user.email,
+            template_id="review_helpful_milestone",
+            props={"first_name": user.first_name, "count": count, "review_title": review.title or "Your Review"},
+        )
+
