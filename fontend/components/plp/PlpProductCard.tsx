@@ -3,6 +3,7 @@
 import { useState, useCallback } from "react";
 import Link from "next/link";
 import type { PlantProduct, PlantSize } from "@/lib/plp-data";
+import { useWishlist, useAddToWishlist, useRemoveWishlist } from "@/features/profile";
 
 /* ── Icons ─────────────────────────────────────────── */
 function HeartIcon({ filled }: { filled: boolean }) {
@@ -142,14 +143,37 @@ interface PlpProductCardProps {
   product: PlantProduct;
   viewMode: "grid" | "list";
   priority?: boolean; // true for first 4 above-fold cards
+  /** Real numeric product ID from the backend — enables live wishlist sync */
+  productId?: number;
 }
 
 export default function PlpProductCard({
   product,
   viewMode,
   priority = false,
+  productId,
 }: PlpProductCardProps) {
-  const [wishlisted, setWishlisted] = useState(false);
+  // ── Wishlist state (real API when productId is available) ─────────────
+  const { isInWishlist } = useWishlist();
+  const { addToWishlist, isLoading: isAddingWishlist } = useAddToWishlist();
+  const { removeFromWishlist, isLoading: isRemovingWishlist, removingId } = useRemoveWishlist();
+
+  // Local fallback state for when no real productId is passed
+  const [localWishlisted, setLocalWishlisted] = useState(false);
+
+  // Auto-detect numeric product ID if product.id is a numeric string/number
+  const numericId =
+    productId ??
+    (!isNaN(Number(product.id)) && Number(product.id) > 0
+      ? Number(product.id)
+      : undefined);
+
+  const isLiveWishlist = numericId != null;
+  const wishlisted = isLiveWishlist ? isInWishlist(numericId!) : localWishlisted;
+  const isWishlistPending = isLiveWishlist
+    ? (isAddingWishlist || (isRemovingWishlist && removingId === numericId))
+    : false;
+
   const [hovering, setHovering] = useState(false);
   const [imgError, setImgError] = useState(false);
   const [selectedSize, setSelectedSize] = useState<PlantSize | null>(
@@ -179,8 +203,17 @@ export default function PlpProductCard({
   const handleWishlist = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    setWishlisted((v) => !v);
-  }, []);
+    if (isWishlistPending) return;
+    if (isLiveWishlist) {
+      if (wishlisted) {
+        removeFromWishlist(numericId!);
+      } else {
+        addToWishlist(numericId!);
+      }
+    } else {
+      setLocalWishlisted((v) => !v);
+    }
+  }, [isWishlistPending, isLiveWishlist, wishlisted, numericId, addToWishlist, removeFromWishlist]);
 
   const handleNotifyMe = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -390,6 +423,7 @@ export default function PlpProductCard({
           onClick={handleWishlist}
           aria-label={wishlisted ? `Remove ${product.name} from wishlist` : `Add ${product.name} to wishlist`}
           aria-pressed={wishlisted}
+          disabled={isWishlistPending}
           style={{
             position: "absolute",
             top: "8px",
@@ -402,9 +436,10 @@ export default function PlpProductCard({
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            cursor: "pointer",
+            cursor: isWishlistPending ? "not-allowed" : "pointer",
             transition: "transform 200ms",
             outline: "none",
+            opacity: isWishlistPending ? 0.6 : 1,
           }}
           onFocus={(e) =>
             ((e.currentTarget as HTMLButtonElement).style.outline =
@@ -600,6 +635,7 @@ export default function PlpProductCard({
                 : `Add ${product.name} to wishlist`
             }
             aria-pressed={wishlisted}
+            disabled={isWishlistPending}
             style={{
               position: "absolute",
               top: "8px",
@@ -612,10 +648,11 @@ export default function PlpProductCard({
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              cursor: "pointer",
+              cursor: isWishlistPending ? "not-allowed" : "pointer",
               transition: "transform 200ms",
               outline: "none",
               zIndex: 2,
+              opacity: isWishlistPending ? 0.6 : 1,
             }}
             onFocus={(e) =>
               ((e.currentTarget as HTMLButtonElement).style.outline =

@@ -887,7 +887,13 @@ function OverviewSection({
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             {wishlistItems.slice(0, 4).map(item => (
               <div key={item.id} style={{ width: 64, textAlign: "center" }}>
-                <div style={{ width: 64, height: 64, borderRadius: "var(--radius-sm)", background: "rgba(0,181,102,0.06)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, marginBottom: 4, border: "1px solid var(--profile-divider)" }}>🌿</div>
+                <div style={{ width: 64, height: 64, borderRadius: "var(--radius-sm)", background: "rgba(0,181,102,0.06)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, marginBottom: 4, border: "1px solid var(--profile-divider)", overflow: "hidden" }}>
+                  {item.product_image ? (
+                    <img src={item.product_image} alt={item.product_title ?? ""} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  ) : (
+                    <span>🌿</span>
+                  )}
+                </div>
                 <p style={{ fontSize: 10, color: "var(--profile-meta)", lineHeight: 1.3 }}>{item.product_title ?? `Product #${item.product_id}`}</p>
               </div>
             ))}
@@ -1202,18 +1208,22 @@ function WishlistSection({
   wishlistItems: any[];
   onRemove: (id: number) => void;
 }) {
+  // Keep a local copy for instant optimistic removal with undo
   const [items, setItems] = useState<any[]>(wishlistItems);
   useEffect(() => { setItems(wishlistItems); }, [wishlistItems]);
+
   const handleRemove = (productId: number) => {
     const prev = [...items];
     setItems(p => p.filter(x => x.product_id !== productId));
     onRemove(productId);
     onToast("Removed from wishlist", "success", () => setItems(prev));
   };
+
   const [selected, setSelected] = useState<number[]>([]);
   const allSelected = selected.length === items.length && items.length > 0;
   const toggleSelect = (id: number) => setSelected(prev => prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]);
   const toggleAll = () => setSelected(allSelected ? [] : items.map(i => i.product_id));
+
   return (
     <section aria-label="Wishlist" style={{ animation: "slideUp var(--motion-normal) ease" }}>
       <div className="section-hdr">
@@ -1234,14 +1244,12 @@ function WishlistSection({
         <button
           disabled={selected.length === 0}
           aria-disabled={selected.length === 0}
-          onClick={() => { onToast(`${selected.length} items added to cart!`, "success"); setSelected([]); }}
-          style={{ height: 36, fontSize: 13, opacity: selected.length === 0 ? 0.4 : 1, background: "var(--profile-cta-bg)", color: "#fff", borderRadius: "var(--radius-full)", border: "none", cursor: selected.length === 0 ? "not-allowed" : "pointer", padding: "0 16px", fontWeight: 600, fontFamily: "Outfit", display: "inline-flex", alignItems: "center", gap: 6 }}>
-          🛒 Add Selected ({selected.length})
-        </button>
-        <button
-          disabled={selected.length === 0}
-          aria-disabled={selected.length === 0}
-          onClick={() => { setItems(prev => prev.filter(i => !selected.includes(i.product_id))); setSelected([]); onToast("Selected items removed", "success"); }}
+          onClick={() => {
+            selected.forEach(pid => onRemove(pid));
+            setItems(prev => prev.filter(i => !selected.includes(i.product_id)));
+            setSelected([]);
+            onToast("Selected items removed", "success");
+          }}
           style={{ height: 36, fontSize: 13, opacity: selected.length === 0 ? 0.4 : 1, background: "transparent", color: "var(--profile-danger-text)", borderRadius: "var(--radius-full)", border: "1px solid var(--profile-danger-border)", cursor: selected.length === 0 ? "not-allowed" : "pointer", padding: "0 16px", fontWeight: 600, fontFamily: "Outfit", display: "inline-flex", alignItems: "center", gap: 6 }}>
           🗑 Remove ({selected.length})
         </button>
@@ -1255,46 +1263,61 @@ function WishlistSection({
         </div>
       ) : (
         <div className="wishlist-grid">
-          {items.map(item => (
-            <div key={item.product_id} style={{ position: "relative", background: "var(--profile-card-bg)", border: `1px solid ${selected.includes(item.product_id) ? "var(--color-surface-raised)" : "var(--profile-card-border)"}`, borderRadius: "var(--radius-md)", overflow: "hidden", boxShadow: "var(--shadow-card)", transition: "all var(--motion-fast) ease" }}>
-              {/* Checkbox overlay */}
-              <div style={{ position: "absolute", top: 10, left: 10, zIndex: 2 }}>
-                <input type="checkbox" checked={selected.includes(item.product_id)} onChange={() => toggleSelect(item.product_id)}
-                  style={{ width: 18, height: 18, accentColor: "var(--color-surface-raised)", cursor: "pointer" }} aria-label={`Select ${item.product_title}`} />
-              </div>
-              {/* Remove btn */}
-              <button onClick={() => handleRemove(item.product_id)} aria-label={`Remove ${item.product_title} from wishlist`}
-                style={{ position: "absolute", top: 8, right: 8, zIndex: 2, width: 28, height: 28, borderRadius: "50%", background: "rgba(255,255,255,0.9)", border: "1px solid var(--profile-divider)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, color: "var(--profile-meta)" }}>
-                ✕
-              </button>
-              {/* Image */}
-              <div style={{ height: 120, background: "rgba(0,181,102,0.05)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 52, position: "relative" }}>
-                {!item.inStock && (
-                  <div style={{ position: "absolute", inset: 0, background: "rgba(255,255,255,0.7)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: "var(--profile-meta)" }}>Out of Stock</span>
-                  </div>
-                )}
-                {item.img}
-              </div>
-              {/* Info */}
-              <div style={{ padding: "12px 12px 14px" }}>
-                <p style={{ fontSize: 13, fontWeight: 600, color: "var(--profile-heading)", marginBottom: 4 }}>{item.product_title}</p>
-                <div style={{ display: "flex", gap: 6, alignItems: "baseline", marginBottom: 10 }}>
-                  <span style={{ fontSize: 15, fontWeight: 700, color: "var(--color-surface-raised)" }}>{item.price}</span>
-                  {item.originalPrice && <span style={{ fontSize: 12, color: "var(--profile-meta)", textDecoration: "line-through" }}>{item.originalPrice}</span>}
+          {items.map(item => {
+            const price = item.product_price ? `₹${item.product_price.toLocaleString("en-IN")}` : null;
+            const comparePrice = item.product_compare_price ? `₹${item.product_compare_price.toLocaleString("en-IN")}` : null;
+            const productLink = item.product_slug ? `/products/${item.product_slug}` : null;
+
+            return (
+              <div key={item.product_id} style={{ position: "relative", background: "var(--profile-card-bg)", border: `1px solid ${selected.includes(item.product_id) ? "var(--color-surface-raised)" : "var(--profile-card-border)"}`, borderRadius: "var(--radius-md)", overflow: "hidden", boxShadow: "var(--shadow-card)", transition: "all var(--motion-fast) ease" }}>
+                {/* Checkbox overlay */}
+                <div style={{ position: "absolute", top: 10, left: 10, zIndex: 2 }}>
+                  <input type="checkbox" checked={selected.includes(item.product_id)} onChange={() => toggleSelect(item.product_id)}
+                    style={{ width: 18, height: 18, accentColor: "var(--color-surface-raised)", cursor: "pointer" }} aria-label={`Select ${item.product_title}`} />
                 </div>
-                {item.inStock ? (
-                  <button className="btn-profile-primary" style={{ width: "100%", justifyContent: "center", height: 36, fontSize: 13 }} onClick={() => onToast(`${item.product_title} added to cart!`, "success")}>
-                    🛒 Move to Cart
-                  </button>
-                ) : (
-                  <button className="btn-profile-outline" style={{ width: "100%", justifyContent: "center", height: 36, fontSize: 13 }}>
-                    Notify Me
-                  </button>
-                )}
+                {/* Remove btn */}
+                <button onClick={() => handleRemove(item.product_id)} aria-label={`Remove ${item.product_title} from wishlist`}
+                  style={{ position: "absolute", top: 8, right: 8, zIndex: 2, width: 28, height: 28, borderRadius: "50%", background: "rgba(255,255,255,0.9)", border: "1px solid var(--profile-divider)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, color: "var(--profile-meta)" }}>
+                  ✕
+                </button>
+                {/* Image */}
+                <div style={{ height: 120, background: "rgba(0,181,102,0.05)", display: "flex", alignItems: "center", justifyContent: "center", position: "relative", overflow: "hidden" }}>
+                  {item.product_image ? (
+                    <img
+                      src={item.product_image}
+                      alt={item.product_title ?? ""}
+                      style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                    />
+                  ) : (
+                    <span style={{ fontSize: 52 }}>🌿</span>
+                  )}
+                </div>
+                {/* Info */}
+                <div style={{ padding: "12px 12px 14px" }}>
+                  {productLink ? (
+                    <Link href={productLink} style={{ textDecoration: "none" }}>
+                      <p style={{ fontSize: 13, fontWeight: 600, color: "var(--profile-heading)", marginBottom: 4, cursor: "pointer" }}>{item.product_title ?? `Product #${item.product_id}`}</p>
+                    </Link>
+                  ) : (
+                    <p style={{ fontSize: 13, fontWeight: 600, color: "var(--profile-heading)", marginBottom: 4 }}>{item.product_title ?? `Product #${item.product_id}`}</p>
+                  )}
+                  {price && (
+                    <div style={{ display: "flex", gap: 6, alignItems: "baseline", marginBottom: 10 }}>
+                      <span style={{ fontSize: 15, fontWeight: 700, color: "var(--color-surface-raised)" }}>{price}</span>
+                      {comparePrice && <span style={{ fontSize: 12, color: "var(--profile-meta)", textDecoration: "line-through" }}>{comparePrice}</span>}
+                    </div>
+                  )}
+                  {productLink && (
+                    <Link href={productLink} style={{ textDecoration: "none" }}>
+                      <button className="btn-profile-primary" style={{ width: "100%", justifyContent: "center", height: 36, fontSize: 13 }}>
+                        View Product
+                      </button>
+                    </Link>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </section>

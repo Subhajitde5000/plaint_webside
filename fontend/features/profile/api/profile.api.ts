@@ -77,6 +77,10 @@ export interface WishlistItem {
   variant_id?: number | null;
   added_at: string;
   product_title?: string | null;
+  product_slug?: string | null;
+  product_image?: string | null;
+  product_price?: number | null;
+  product_compare_price?: number | null;
 }
 
 export interface WishlistData {

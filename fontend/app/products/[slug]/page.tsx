@@ -9,6 +9,7 @@ import { useProducts } from "@/features/products/hooks/useProducts";
 import { useCart } from "@/features/cart/hooks/useCart";
 import { useCheckoutStore } from "@/store/checkout.store";
 import { useProductReviews, useVoteHelpful, useReportReview } from "@/features/reviews";
+import { useWishlist, useAddToWishlist, useRemoveWishlist } from "@/features/profile";
 
 /* ═══════════════════════════════════════════════════
    SVG ICONS
@@ -383,11 +384,26 @@ export default function ProductDetailPage({ params }: PageProps) {
   const { addItem, isAddingItem } = useCart();
   const [qty, setQty] = useState(1);
   const [selectedSize, setSelectedSize] = useState(0); // default to first variant
-  const [wishlisted, setWishlisted] = useState(false);
   const [activeTab, setActiveTab] = useState<"about" | "care" | "reviews">("about");
   const [toastVisible, setToastVisible] = useState(false);
   const [toastMsg, setToastMsg] = useState("Added to cart!");
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Wishlist — real API integration
+  const { isInWishlist } = useWishlist();
+  const { addToWishlist, isLoading: isAddingWishlist } = useAddToWishlist();
+  const { removeFromWishlist, isLoading: isRemovingWishlist } = useRemoveWishlist();
+  const wishlisted = product ? isInWishlist(product.id) : false;
+  const isWishlistPending = isAddingWishlist || isRemovingWishlist;
+
+  const handleToggleWishlist = () => {
+    if (!product || isWishlistPending) return;
+    if (wishlisted) {
+      removeFromWishlist(product.id);
+    } else {
+      addToWishlist(product.id);
+    }
+  };
 
   const [reviewSort, setReviewSort] = useState<"newest" | "helpful" | "highest_rating" | "lowest_rating">("newest");
   const [reviewStarFilter, setReviewStarFilter] = useState<number | undefined>(undefined);
@@ -1152,15 +1168,19 @@ export default function ProductDetailPage({ params }: PageProps) {
 
               {/* Wishlist */}
               <button
-                onClick={() => setWishlisted((w) => !w)}
+                onClick={handleToggleWishlist}
                 aria-label={wishlisted ? "Remove from wishlist" : "Add to wishlist"}
+                aria-pressed={wishlisted}
+                disabled={isWishlistPending}
                 style={{
                   width: "46px", height: "46px", borderRadius: "50%",
                   border: `2px solid ${wishlisted ? "#e53935" : "rgba(45,90,39,0.20)"}`,
                   background: wishlisted ? "#fff5f5" : "white",
-                  cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+                  cursor: isWishlistPending ? "not-allowed" : "pointer",
+                  display: "flex", alignItems: "center", justifyContent: "center",
                   transition: "all 0.2s ease",
                   color: wishlisted ? "#e53935" : "var(--color-text-secondary)",
+                  opacity: isWishlistPending ? 0.6 : 1,
                 }}
               >
                 <HeartIcon filled={wishlisted} />

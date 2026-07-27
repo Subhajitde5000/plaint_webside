@@ -135,16 +135,29 @@ async def get_wishlist(db: Session = Depends(get_db), user: User = Depends(get_c
     wishlist = db.query(Wishlist).filter(Wishlist.user_id == user.id).first()
     if not wishlist:
         return {"items": []}
-    return {"items": [
-        {
+
+    items = []
+    for item in wishlist.items:
+        p = item.product
+        # Pick the primary image (position=1 or first available)
+        primary_image: str | None = None
+        if p and p.images:
+            primary = next((img for img in p.images if img.is_primary), None)
+            primary_image = (primary or p.images[0]).url if (primary or p.images) else None
+
+        items.append({
             "id": item.id,
             "product_id": item.product_id,
             "variant_id": item.variant_id,
             "added_at": item.added_at,
-            "product_title": item.product.title if item.product else None,
-        }
-        for item in wishlist.items
-    ]}
+            "product_title": p.title if p else None,
+            "product_slug": p.slug if p else None,
+            "product_image": primary_image,
+            "product_price": float(p.base_price) if p else None,
+            "product_compare_price": float(p.compare_at_price) if p and p.compare_at_price else None,
+        })
+
+    return {"items": items}
 
 
 @router.post("/me/wishlist/{product_id}", status_code=status.HTTP_201_CREATED)
@@ -155,7 +168,6 @@ async def add_to_wishlist(
 ):
     wishlist = db.query(Wishlist).filter(Wishlist.user_id == user.id).first()
     if not wishlist:
-        import uuid
         wishlist = Wishlist(user_id=user.id)
         db.add(wishlist)
         db.flush()
