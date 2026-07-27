@@ -8,6 +8,7 @@ import { useProduct } from "@/features/products/hooks/useProduct";
 import { useProducts } from "@/features/products/hooks/useProducts";
 import { useCart } from "@/features/cart/hooks/useCart";
 import { useCheckoutStore } from "@/store/checkout.store";
+import { useAuthStore } from "@/store/auth.store";
 import { useProductReviews, useVoteHelpful, useReportReview } from "@/features/reviews";
 import { useWishlist, useAddToWishlist, useRemoveWishlist } from "@/features/profile";
 
@@ -396,12 +397,49 @@ export default function ProductDetailPage({ params }: PageProps) {
   const wishlisted = product ? isInWishlist(product.id) : false;
   const isWishlistPending = isAddingWishlist || isRemovingWishlist;
 
+  const { isAuthenticated } = useAuthStore();
+
   const handleToggleWishlist = () => {
     if (!product || isWishlistPending) return;
+
+    if (!isAuthenticated) {
+      showToast("Please sign in to save items to your wishlist ❤️");
+      setTimeout(() => {
+        router.push(`/login?returnTo=${encodeURIComponent(`/products/${slug}`)}`);
+      }, 1000);
+      return;
+    }
+
     if (wishlisted) {
-      removeFromWishlist(product.id);
+      removeFromWishlist(product.id, {
+        onSuccess: () => {
+          showToast("Removed from wishlist");
+        },
+        onError: (err: any) => {
+          const detail = err?.response?.data?.detail || "Could not update wishlist.";
+          if (err?.response?.status === 401) {
+            showToast("Session expired. Please sign in again.");
+            router.push(`/login?returnTo=${encodeURIComponent(`/products/${slug}`)}`);
+          } else {
+            showToast(detail);
+          }
+        },
+      });
     } else {
-      addToWishlist(product.id);
+      addToWishlist(product.id, {
+        onSuccess: () => {
+          showToast("Added to wishlist ❤️");
+        },
+        onError: (err: any) => {
+          const detail = err?.response?.data?.detail || "Could not update wishlist.";
+          if (err?.response?.status === 401) {
+            showToast("Session expired. Please sign in again.");
+            router.push(`/login?returnTo=${encodeURIComponent(`/products/${slug}`)}`);
+          } else {
+            showToast(detail);
+          }
+        },
+      });
     }
   };
 

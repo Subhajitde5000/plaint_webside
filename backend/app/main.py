@@ -34,9 +34,18 @@ app = FastAPI(
 )
 
 # ── Middleware ────────────────────────────────────────────────────────
+origins = settings.ALLOWED_ORIGINS
+if isinstance(origins, str):
+    import json
+    try:
+        origins = json.loads(origins)
+    except Exception:
+        origins = [o.strip() for o in origins.split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.ALLOWED_ORIGINS,
+    allow_origins=origins if origins else ["*"],
+    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient, MutateOptions } from "@tanstack/react-query";
 import { addToWishlistApi } from "../api/profile.api";
 import { WISHLIST_QUERY_KEY } from "./useWishlist";
 
@@ -22,7 +22,10 @@ export function useAddToWishlist() {
   });
 
   return {
-    addToWishlist: (productId: number) => mutation.mutate(productId),
+    addToWishlist: (
+      productId: number,
+      options?: MutateOptions<{ message: string }, Error, number, unknown>
+    ) => mutation.mutate(productId, options),
     isLoading: mutation.isPending,
     isSuccess: mutation.isSuccess,
     error: (mutation.error as any)?.response?.data?.detail as string | undefined,

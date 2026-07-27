@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient, MutateOptions } from "@tanstack/react-query";
 import { removeFromWishlistApi } from "../api/profile.api";
 import { WISHLIST_QUERY_KEY } from "./useWishlist";
 
@@ -21,7 +21,10 @@ export function useRemoveWishlist() {
   });
 
   return {
-    removeFromWishlist: (productId: number) => mutation.mutate(productId),
+    removeFromWishlist: (
+      productId: number,
+      options?: MutateOptions<void, Error, number, unknown>
+    ) => mutation.mutate(productId, options),
     isLoading: mutation.isPending,
     isSuccess: mutation.isSuccess,
     /** The productId currently being removed — useful for per-item loading state */
