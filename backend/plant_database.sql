@@ -1,3 +1,4 @@
+-- Active: 1783267041355@@127.0.0.1@3306@plant_store
 USE plant_store;
 
 CREATE TABLE IF NOT EXISTS users (
@@ -9,7 +10,7 @@ CREATE TABLE IF NOT EXISTS users (
     password_HASH       VARCHAR(255),
     role                ENUM('customer', 'super_admin') DEFAULT 'customer',
     phone               VARCHAR(15) UNIQUE,
-    PREFERRED_LANGUAGE  CHAR(2) DEFAULT('en'),
+    PREFERRED_LANGUAGE  CHAR(2) DEFAULT 'en',
     email_verified      BOOLEAN DEFAULT FALSE,
     phone_verified      BOOLEAN DEFAULT FALSE,
     is_block            BOOLEAN DEFAULT FALSE,
@@ -667,7 +668,7 @@ CREATE TABLE IF NOT EXISTS discount_audit_logs (
     details VARCHAR(2000),
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (discount_id) REFERENCES discounts(id) ON DELETE CASCADE,
-    FOREIGN KEY (admin_id) REFERENCES admin_users(id) ON DELETE SET NULL,
+    FOREIGN KEY (admin_id) REFERENCES admin_users(user_id) ON DELETE SET NULL,
     INDEX idx_discount_audit_discount_id (discount_id),
     INDEX idx_discount_audit_created_at (created_at)
 ) ENGINE=InnoDB;
@@ -768,13 +769,13 @@ CREATE TABLE IF NOT EXISTS loyalty_transactions (
 
 -- Internal notes written by staff from the Admin Customers module.
 CREATE TABLE IF NOT EXISTS customer_notes (
-    id              BIGINT AUTO_INCREMENT PRIMARY KEY,
-    user_id         BIGINT NOT NULL,
-    admin_id        BIGINT NULL,
+    id              BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id         BIGINT UNSIGNED NOT NULL,
+    admin_id        BIGINT UNSIGNED,
     note            TEXT NOT NULL,
     created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    FOREIGN KEY (admin_id) REFERENCES admin_users(id) ON DELETE SET NULL,
+    FOREIGN KEY (admin_id) REFERENCES admin_users(user_id) ON DELETE SET NULL,
     INDEX idx_customer_notes_user_created (user_id, created_at)
 ) ENGINE=InnoDB;
 
@@ -843,7 +844,7 @@ CREATE TABLE IF NOT EXISTS reviews (
     FOREIGN KEY (order_item_id) REFERENCES order_items(id) ON DELETE SET NULL,
     FOREIGN KEY (admin_reply_by) REFERENCES admin_users(user_id) ON DELETE SET NULL,
     FOREIGN KEY (moderated_by) REFERENCES admin_users(user_id) ON DELETE SET NULL,
-    INDEX idx_product_id (product_id)
+    INDEX idx_product_id (product_id),
     INDEX idx_status (status),
     INDEX idx_rating (rating),
     INDEX idx_created_at (created_at)
@@ -892,9 +893,9 @@ CREATE TABLE IF NOT EXISTS review_moderation_history (
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS review_helpful_votes (
-  id BIGINT AUTO_INCREMENT PRIMARY KEY,
-  review_id BIGINT NOT NULL,
-  user_id BIGINT NOT NULL,
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  review_id BIGINT UNSIGNED NOT NULL,
+  user_id BIGINT UNSIGNED NOT NULL,
   is_helpful TINYINT(1) DEFAULT 1,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (review_id) REFERENCES reviews(id) ON DELETE CASCADE,
