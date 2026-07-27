@@ -1,7 +1,6 @@
 from pydantic_settings import BaseSettings
 from functools import lru_cache
-from typing import List
-
+from typing import List, Union, Any
 
 class Settings(BaseSettings):
     # App
@@ -58,7 +57,7 @@ class Settings(BaseSettings):
     EMAILS_FROM_EMAIL: str = ""
 
     # CORS
-    ALLOWED_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:3001"]
+    ALLOWED_ORIGINS: Union[List[str], str] = ["http://localhost:3000", "http://localhost:3001", "https://plaintwebsite.vercel.app"]
 
     class Config:
         env_file = ".env"
