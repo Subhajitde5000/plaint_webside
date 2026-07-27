@@ -4,11 +4,12 @@ import { useState, useCallback, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  MOCK_DISCOUNTS,
   Discount,
   DiscountType,
   DiscountMethod,
 } from "./data";
+import { checkDiscountCodeApi, DiscountPayload } from "@/features/admin-discounts/api/admin-discounts.api";
+import { useActivateDiscount, useAdminDiscount, useCreateDiscount, useUpdateDiscount } from "@/features/admin-discounts/hooks/useAdminDiscounts";
 
 /* ─── Design Tokens ─────────────────────────────────────────────────────────── */
 const T = {
@@ -207,48 +208,51 @@ interface DiscountFormPageProps {
 export default function DiscountFormPage({ discountId }: DiscountFormPageProps) {
   const router = useRouter();
   const isEditing = !!discountId;
-  const existing = isEditing ? MOCK_DISCOUNTS.find((d: typeof MOCK_DISCOUNTS[0]) => d.id === discountId) : undefined;
+  const { data: existing } = useAdminDiscount(discountId);
+  const createDiscount = useCreateDiscount();
+  const updateDiscount = useUpdateDiscount(discountId ?? "");
+  const activateDiscount = useActivateDiscount();
 
   /* ─── Form state ── */
-  const [method, setMethod] = useState<DiscountMethod>(existing?.method ?? "code");
+  const [method, setMethod] = useState<DiscountMethod>("code");
   const [discountCode, setDiscountCode] = useState(
-    (existing?.method === "code" ? existing?.code : "") ?? ""
+    ""
   );
   const [title, setTitle] = useState(
-    (existing?.method === "automatic" ? existing?.code : existing?.title) ?? ""
+    ""
   );
-  const [type, setType] = useState<DiscountType>(existing?.type ?? "percentage");
-  const [value, setValue] = useState(String(existing?.value ?? ""));
-  const [valueCap, setValueCap] = useState(String(existing?.valueCap ?? ""));
-  const [capEnabled, setCapEnabled] = useState(!!existing?.valueCap);
+  const [type, setType] = useState<DiscountType>("percentage");
+  const [value, setValue] = useState("");
+  const [valueCap, setValueCap] = useState("");
+  const [capEnabled, setCapEnabled] = useState(false);
 
-  const [appliesTo, setAppliesTo] = useState<"all" | "collections" | "products" | "customers">(existing?.appliesTo ?? "all");
+  const [appliesTo, setAppliesTo] = useState<"all" | "collections" | "products" | "customers">("all");
   const [excludeSaleItems, setExcludeSaleItems] = useState(false);
 
-  const [eligibility, setEligibility] = useState<"all" | "segments" | "specific" | "tiers">(existing?.customerEligibility ?? "all");
-  const [firstTimeOnly, setFirstTimeOnly] = useState(existing?.firstTimeOnly ?? false);
+  const [eligibility, setEligibility] = useState<"all" | "segments" | "specific" | "tiers">("all");
+  const [firstTimeOnly, setFirstTimeOnly] = useState(false);
 
   const [minReq, setMinReq] = useState<"none" | "amount" | "quantity">(
-    existing?.minOrderAmount ? "amount" : existing?.minQuantity ? "quantity" : "none"
+    "none"
   );
-  const [minAmount, setMinAmount] = useState(String(existing?.minOrderAmount ?? ""));
-  const [minQty, setMinQty] = useState(String(existing?.minQuantity ?? ""));
+  const [minAmount, setMinAmount] = useState("");
+  const [minQty, setMinQty] = useState("");
 
-  const [usageLimitEnabled, setUsageLimitEnabled] = useState(!!existing?.usageLimit);
-  const [usageLimitValue, setUsageLimitValue] = useState(String(existing?.usageLimit ?? ""));
+  const [usageLimitEnabled, setUsageLimitEnabled] = useState(false);
+  const [usageLimitValue, setUsageLimitValue] = useState("");
   const [oncePerCustomer, setOncePerCustomer] = useState(true);
 
-  const [combinesProduct, setCombinesProduct] = useState(existing?.combinesWithProduct ?? false);
-  const [combinesOrder, setCombinesOrder] = useState(existing?.combinesWithOrder ?? false);
-  const [combinesShipping, setCombinesShipping] = useState(existing?.combinesWithShipping ?? false);
+  const [combinesProduct, setCombinesProduct] = useState(false);
+  const [combinesOrder, setCombinesOrder] = useState(false);
+  const [combinesShipping, setCombinesShipping] = useState(false);
 
   const [startDate, setStartDate] = useState(
-    existing?.startDate ? new Date(existing.startDate).toISOString().split("T")[0] : todayStr()
+    todayStr()
   );
   const [startTime, setStartTime] = useState("00:00");
-  const [endDateEnabled, setEndDateEnabled] = useState(!!existing?.endDate);
+  const [endDateEnabled, setEndDateEnabled] = useState(false);
   const [endDate, setEndDate] = useState(
-    existing?.endDate ? new Date(existing.endDate).toISOString().split("T")[0] : ""
+    ""
   );
   const [endTime, setEndTime] = useState("23:59");
 
@@ -278,17 +282,22 @@ export default function DiscountFormPage({ discountId }: DiscountFormPageProps) 
     });
   }, []);
 
-  // Code uniqueness check (simulated)
-  const checkCodeUnique = useCallback((code: string) => {
+  useEffect(() => {
+    if (!existing) return;
+    const typeMap = { percentage: "percentage", fixed_amount: "fixed", free_shipping: "shipping", bogo: "bogo" } as const;
+    const appliesMap = { all: "all", specific_collections: "collections", specific_products: "products", specific_customers: "customers" } as const;
+    const eligibilityMap = { all: "all", specific_segments: "segments", specific_customers: "specific", loyalty_tier: "tiers", first_time: "all" } as const;
+    setMethod(existing.method); setDiscountCode(existing.code ?? ""); setTitle(existing.title); setType(typeMap[existing.discount_type]); setValue(String(existing.value ?? ""));
+    setValueCap(String(existing.max_discount_amount ?? "")); setCapEnabled(Boolean(existing.max_discount_amount)); setAppliesTo(appliesMap[existing.applies_to]); setEligibility(eligibilityMap[existing.customer_eligibility]);
+    setFirstTimeOnly(existing.first_time_only); setMinReq(existing.min_requirement_type); setMinAmount(existing.min_requirement_type === "amount" ? String(existing.min_requirement_value ?? "") : ""); setMinQty(existing.min_requirement_type === "quantity" ? String(existing.min_requirement_value ?? "") : "");
+    setUsageLimitEnabled(Boolean(existing.usage_limit_total)); setUsageLimitValue(String(existing.usage_limit_total ?? "")); setOncePerCustomer(existing.usage_limit_per_customer === 1); setCombinesProduct(existing.combine_with_product); setCombinesOrder(existing.combine_with_order); setCombinesShipping(existing.combine_with_shipping);
+    setStartDate(existing.starts_at.slice(0, 10)); setEndDateEnabled(Boolean(existing.ends_at)); setEndDate(existing.ends_at?.slice(0, 10) ?? "");
+  }, [existing]);
+
+  const checkCodeUnique = useCallback(async (code: string) => {
     if (!code) return;
-    const conflict = MOCK_DISCOUNTS.find(
-      (d: typeof MOCK_DISCOUNTS[0]) => d.code === code && d.method === "code" && d.id !== discountId
-    );
-    if (conflict) {
-      setCodeError(`This code is already in use by "${conflict.title}".`);
-    } else {
-      setCodeError("");
-    }
+    try { setCodeError((await checkDiscountCodeApi(code, discountId)).available ? "" : "This code is already in use."); }
+    catch { setCodeError("Unable to validate this code. Try again."); }
   }, [discountId]);
 
   // Keyboard shortcuts
@@ -318,24 +327,43 @@ export default function DiscountFormPage({ discountId }: DiscountFormPageProps) 
     return errs;
   }
 
-  function handleSaveDraft() {
+  const buildPayload = (status: "draft" | "active"): DiscountPayload => ({
+    code: method === "code" ? discountCode.trim() : undefined, title: title.trim() || discountCode.trim(), method,
+    discountType: type === "fixed" ? "fixed_amount" : type === "shipping" ? "free_shipping" : type,
+    value: type === "shipping" ? undefined : Number(value), maxDiscountAmount: capEnabled && valueCap ? Number(valueCap) : undefined,
+    appliesTo: appliesTo === "collections" ? "specific_collections" : appliesTo === "products" ? "specific_products" : appliesTo === "customers" ? "specific_customers" : "all",
+    customerEligibility: firstTimeOnly ? "first_time" : eligibility === "segments" ? "specific_segments" : eligibility === "specific" ? "specific_customers" : eligibility === "tiers" ? "loyalty_tier" : "all",
+    firstTimeOnly, minRequirementType: minReq, minRequirementValue: minReq === "amount" ? Number(minAmount) : minReq === "quantity" ? Number(minQty) : undefined,
+    usageLimitTotal: usageLimitEnabled ? Number(usageLimitValue) : undefined, usageLimitPerCustomer: oncePerCustomer ? 1 : 0,
+    combineWithProduct: combinesProduct, combineWithOrder: combinesOrder, combineWithShipping: combinesShipping,
+    startsAt: new Date(`${startDate}T${startTime || "00:00"}`).toISOString(), endsAt: endDateEnabled && endDate ? new Date(`${endDate}T${endTime || "23:59"}`).toISOString() : undefined, status,
+  });
+
+  async function handleSaveDraft() {
     const errs = validate(false);
     setErrors(errs);
     if (Object.keys(errs).length > 0) return;
-    addToast(isEditing ? "Changes saved as draft." : "Discount saved as draft.", "success");
-    setTimeout(() => router.push("/admin/discounts"), 1200);
+    try {
+      if (isEditing) await updateDiscount.mutateAsync(buildPayload("draft"));
+      else await createDiscount.mutateAsync(buildPayload("draft"));
+      addToast(isEditing ? "Changes saved as draft." : "Discount saved as draft.", "success");
+      router.push("/admin/discounts");
+    } catch { addToast("Unable to save the discount.", "error"); }
   }
 
-  function handleActivate() {
+  async function handleActivate() {
     const errs = validate(true);
     setErrors(errs);
     if (Object.keys(errs).length > 0) {
       addToast("Fix the errors before activating.", "error");
       return;
     }
-    const code = method === "code" ? discountCode : title;
-    addToast(`"${code}" is now active.`, "success");
-    setTimeout(() => router.push("/admin/discounts"), 1200);
+    try {
+      if (isEditing) { await updateDiscount.mutateAsync(buildPayload("draft")); await activateDiscount.mutateAsync(discountId!); }
+      else await createDiscount.mutateAsync(buildPayload("active"));
+      addToast(`"${method === "code" ? discountCode : title}" is now active.`, "success");
+      router.push("/admin/discounts");
+    } catch { addToast("Unable to activate the discount.", "error"); }
   }
 
   /* ─── Derived live preview values ── */
@@ -351,10 +379,10 @@ export default function DiscountFormPage({ discountId }: DiscountFormPageProps) 
   })();
 
   /* ─── Usage stats sparkline ── */
-  const trend = existing?.usageTrend ?? [];
+  const trend: number[] = [];
   const maxTrend = Math.max(...trend, 1);
 
-  const lockedByUsage = isEditing && (existing?.usedCount ?? 0) > 0;
+  const lockedByUsage = isEditing && (existing?.usage_count ?? 0) > 0;
 
   const typeOptions: { key: DiscountType; icon: string; label: string }[] = [
     { key: "percentage", icon: "%", label: "Percentage" },
@@ -448,7 +476,7 @@ export default function DiscountFormPage({ discountId }: DiscountFormPageProps) 
             </h1>
             {isEditing && existing && (
               <p style={{ margin: "4px 0 0", fontSize: 13, color: T.muted }}>
-                Created {formatDateDisplay(existing.createdAt)} by {existing.createdBy}
+                Created {formatDateDisplay(existing.created_at)}
               </p>
             )}
           </div>
@@ -866,24 +894,24 @@ export default function DiscountFormPage({ discountId }: DiscountFormPageProps) 
                       <Input value={usageLimitValue} onChange={setUsageLimitValue} type="number" placeholder="100" error={errors.usageLimit} />
                     </div>
                   )}
-                  {isEditing && existing && usageLimitEnabled && existing.usageLimit && (
+                  {isEditing && existing && usageLimitEnabled && existing.usage_limit_total && (
                     <div style={{ marginTop: 10 }}>
                       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5, fontSize: 12, color: T.muted }}>
-                        <span>Used {existing.usedCount} of {existing.usageLimit} ({Math.round(existing.usedCount / existing.usageLimit * 100)}%)</span>
+                        <span>Used {existing.usage_count} of {existing.usage_limit_total} ({Math.round(existing.usage_count / existing.usage_limit_total * 100)}%)</span>
                       </div>
                       <div style={{ height: 8, borderRadius: 9999, background: T.border, overflow: "hidden" }}>
                         <div
                           role="progressbar"
-                          aria-valuenow={existing.usedCount}
+                          aria-valuenow={existing.usage_count}
                           aria-valuemin={0}
-                          aria-valuemax={existing.usageLimit}
-                          aria-label={`${existing.usedCount} of ${existing.usageLimit} uses`}
+                          aria-valuemax={existing.usage_limit_total}
+                          aria-label={`${existing.usage_count} of ${existing.usage_limit_total} uses`}
                           style={{
                             height: "100%",
-                            width: `${Math.min(100, (existing.usedCount / existing.usageLimit) * 100)}%`,
+                            width: `${Math.min(100, (existing.usage_count / existing.usage_limit_total) * 100)}%`,
                             borderRadius: 9999,
-                            background: existing.usedCount / existing.usageLimit >= 1 ? T.error :
-                              existing.usedCount / existing.usageLimit >= 0.9 ? T.warning : T.accent,
+                            background: existing.usage_count / existing.usage_limit_total >= 1 ? T.error :
+                              existing.usage_count / existing.usage_limit_total >= 0.9 ? T.warning : T.accent,
                             transition: "width 400ms ease",
                           }}
                         />
@@ -1138,11 +1166,11 @@ export default function DiscountFormPage({ discountId }: DiscountFormPageProps) 
                 <div style={{ padding: "14px 20px", borderBottom: `1px solid ${T.borderMuted}`, fontSize: 15, fontWeight: 600 }}>Usage Stats</div>
                 <div style={{ padding: 16 }}>
                   {[
-                    { label: "Times used",           value: String(existing.usedCount) },
-                    { label: "Total discount given",  value: existing.totalDiscountGiven ? `₹${existing.totalDiscountGiven.toLocaleString("en-IN")}` : "—" },
-                    { label: "Orders using this",     value: existing.ordersUsing ? String(existing.ordersUsing) : "—" },
-                    { label: "Avg order value",       value: existing.avgOrderValue ? `₹${existing.avgOrderValue.toLocaleString("en-IN")}` : "—" },
-                    { label: "Revenue generated",     value: existing.revenueGenerated ? `₹${existing.revenueGenerated.toLocaleString("en-IN")}` : "—" },
+                    { label: "Times used",           value: String(existing.usage_count) },
+                    { label: "Total discount given",  value: "Open report" },
+                    { label: "Orders using this",     value: String(existing.usage_count) },
+                    { label: "Avg order value",       value: "Open report" },
+                    { label: "Revenue generated",     value: "Open report" },
                   ].map(row => (
                     <div key={row.label} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", borderBottom: `1px solid ${T.borderMuted}` }}>
                       <span style={{ fontSize: 12, color: T.muted }}>{row.label}</span>

@@ -55,7 +55,7 @@ class Discount(Base):
     ends_at = Column(DateTime)
 
     status = Column(
-        Enum("draft", "scheduled", "active", "paused", "expired"), default="draft"
+        Enum("draft", "scheduled", "active", "paused", "expired", "archived"), default="draft"
     )
 
     created_by = Column(BigInteger, ForeignKey("admin_users.id", ondelete="SET NULL"))
@@ -76,6 +76,21 @@ class Discount(Base):
         Index("idx_ends_at", "ends_at"),
     )
 
+
+class DiscountAuditLog(Base):
+    __tablename__ = "discount_audit_logs"
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    discount_id = Column(BigInteger, ForeignKey("discounts.id", ondelete="CASCADE"), nullable=False)
+    admin_id = Column(BigInteger, ForeignKey("admin_users.id", ondelete="SET NULL"))
+    action = Column(String(50), nullable=False)
+    details = Column(String(2000))
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+
+    __table_args__ = (
+        Index("idx_discount_audit_discount_id", "discount_id"),
+        Index("idx_discount_audit_created_at", "created_at"),
+    )
 
 class DiscountProduct(Base):
     __tablename__ = "discount_products"

@@ -19,3 +19,9 @@
 -------------------product-----------
 14.product stock related problem
 product can be deleted
+
+
+
+......................customar................
+15. admin cad see the the user card and wish list
+

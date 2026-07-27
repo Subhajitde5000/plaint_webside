@@ -35,6 +35,7 @@ def _status(user: User, order_count: int, last_order_at: datetime | None) -> str
 
 
 def _summary(user: User, account: LoyaltyAccount | None, order_count: int, ltv, last_order_at, city: str | None) -> dict:
+    avail_points = account.available_points if account else 0
     return {
         "uuid": user.uuid,
         "first_name": user.first_name,
@@ -49,12 +50,15 @@ def _summary(user: User, account: LoyaltyAccount | None, order_count: int, ltv, 
         "last_login_at": user.last_login_at,
         "city": city,
         "tier": account.tier if account else "plant_lover",
-        "loyalty_points": account.points_balance if account else 0,
+        "loyalty_points": avail_points,
+        "points_balance": account.points_balance if account else 0,
+        "points_reserved": account.points_reserved if account else 0,
         "orders": int(order_count or 0),
         "ltv": float(ltv or 0),
         "last_order_at": last_order_at,
         "status": _status(user, int(order_count or 0), last_order_at),
     }
+
 
 
 @router.get("/")

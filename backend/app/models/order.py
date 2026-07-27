@@ -137,6 +137,7 @@ class OrderItem(Base):
     total_price = Column(DECIMAL(10, 2), nullable=False)
     tax_amount = Column(DECIMAL(10, 2), default=0.00)
     image_url = Column(String(500))   # snapshot
+    review_reminder_sent_at = Column(DateTime)
 
     order = relationship("Order", back_populates="items")
     variant = relationship("ProductVariant", back_populates="order_items")

@@ -52,6 +52,8 @@ export default function CartPage() {
   } = useCart();
 
   const { isAuthenticated } = useAuthStore();
+  const setDiscountCode = useCheckoutStore((state) => state.setDiscountCode);
+  const setDiscountMeta = useCheckoutStore((state) => state.setDiscountMeta);
 
   const [promoInput, setPromoInput] = useState("");
   const [appliedDiscount, setAppliedDiscount] = useState<{
@@ -93,17 +95,22 @@ export default function CartPage() {
 
     applyDiscount(promoInput.trim(), {
       onSuccess: (data: any) => {
-        setAppliedDiscount({
+        const meta = {
           code: data.code,
-          discount_type: data.discount_type,
+          discount_type: data.discount_type as "percentage" | "fixed",
           value: Number(data.value),
-        });
+        };
+        setAppliedDiscount(meta);
+        setDiscountCode(data.code);
+        setDiscountMeta(meta);
         setPromoSuccess(`Coupon "${data.code}" applied!`);
       },
       onError: (err: any) => {
         const detail = err?.response?.data?.detail || "Invalid or expired discount code.";
         setPromoError(detail);
         setAppliedDiscount(null);
+        setDiscountCode(null);
+        setDiscountMeta(null);
       }
     });
   };
@@ -115,6 +122,8 @@ export default function CartPage() {
         setPromoInput("");
         setPromoSuccess("");
         setPromoError("");
+        setDiscountCode(null);
+        setDiscountMeta(null);
       }
     });
   };
@@ -134,17 +143,32 @@ export default function CartPage() {
   const subtotal = Number(cart?.subtotal ?? 0);
   
   let discountAmount = 0;
+  let discountLabel = "";
+
   if (appliedDiscount) {
     if (appliedDiscount.discount_type === "percentage") {
       discountAmount = (subtotal * appliedDiscount.value) / 100;
     } else {
       discountAmount = appliedDiscount.value;
     }
+    discountLabel = `Discount (${appliedDiscount.code})`;
+  } else if (cart?.automatic_discount) {
+    const auto = cart.automatic_discount;
+    discountAmount = Number(auto.discount_amount ?? 0);
+    if (!discountAmount && auto.value) {
+      if (auto.discount_type === "percentage") {
+        discountAmount = (subtotal * Number(auto.value)) / 100;
+      } else {
+        discountAmount = Number(auto.value);
+      }
+    }
+    discountLabel = `Automatic Discount (${auto.title || auto.code || "Applied"})`;
   }
 
   const postDiscountSubtotal = Math.max(0, subtotal - discountAmount);
-  // Free shipping over ₹500, otherwise ₹49 shipping fee
-  const shippingFee = postDiscountSubtotal >= 500 || cartItems.length === 0 ? 0 : 49;
+  const isFreeShipping = (appliedDiscount?.discount_type as string === "free_shipping") || (!appliedDiscount && cart?.automatic_discount?.free_shipping);
+  // Free shipping over ₹500 or if free shipping discount, otherwise ₹49 shipping fee
+  const shippingFee = isFreeShipping || postDiscountSubtotal >= 500 || cartItems.length === 0 ? 0 : 49;
   // Tax 8%
   const taxAmount = postDiscountSubtotal * 0.08;
   const total = postDiscountSubtotal + shippingFee + taxAmount;
@@ -482,7 +506,7 @@ export default function CartPage() {
 
                   {discountAmount > 0 && (
                     <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, color: T.green }}>
-                      <span>Discount ({appliedDiscount?.code})</span>
+                      <span>{discountLabel || `Discount (${appliedDiscount?.code})`}</span>
                       <span style={{ fontWeight: 500 }}>-₹{discountAmount.toLocaleString("en-IN")}</span>
                     </div>
                   )}

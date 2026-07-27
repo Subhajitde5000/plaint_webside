@@ -41,9 +41,9 @@ def post_payment_tasks(self, order_id: int):
                         reference_id=order.order_number,
                     ))
 
-        # 2. Award loyalty points
-        if order.user_id:
-            LoyaltyService(db).earn_points(order.user_id, order)
+        # 2. Confirm reserved loyalty points redemption if used
+        if order.user_id and order.loyalty_points_used:
+            LoyaltyService(db).confirm_redeemed_points(order.user_id, order.loyalty_points_used, order)
 
         # 3. Update discount usage count
         if order.discount_id:
@@ -164,5 +164,28 @@ def send_cancellation_notification(order_id: int):
         order = db.query(Order).filter(Order.id == order_id).first()
         if order and order.user_id and order.user:
             asyncio.run(NotificationService().order_cancelled(order.user, order))
+    finally:
+        db.close()
+
+
+@celery_app.task
+def process_return_window_loyalty_points():
+    """Periodic task to award points for delivered orders whose 7-day return window has expired."""
+    from datetime import datetime, timezone, timedelta
+    db = SessionLocal()
+    try:
+        cutoff = datetime.now(timezone.utc) - timedelta(days=7)
+        orders = db.query(Order).filter(
+            Order.status.in_(["delivered", "completed"]),
+            Order.user_id.isnot(None),
+        ).all()
+        svc = LoyaltyService(db)
+        for order in orders:
+            try:
+                earned = svc.process_earned_points_post_return_window(order)
+                if earned > 0:
+                    db.commit()
+            except Exception:
+                db.rollback()
     finally:
         db.close()

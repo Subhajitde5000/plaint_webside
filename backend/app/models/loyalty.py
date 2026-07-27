@@ -12,6 +12,7 @@ class LoyaltyAccount(Base):
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     user_id = Column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False)
     points_balance = Column(Integer, default=0)
+    points_reserved = Column(Integer, default=0)
     tier = Column(Enum("plant_lover", "silver", "gold"), default="plant_lover")
     tier_updated_at = Column(DateTime)
     lifetime_points = Column(Integer, default=0)  # never decremented
@@ -19,6 +20,11 @@ class LoyaltyAccount(Base):
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
     user = relationship("User", back_populates="loyalty_account")
+
+    @property
+    def available_points(self) -> int:
+        return max(0, (self.points_balance or 0) - (self.points_reserved or 0))
+
 
 
 class LoyaltyTransaction(Base):

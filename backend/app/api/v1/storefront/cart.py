@@ -6,9 +6,9 @@ from app.database import get_db
 from app.dependencies import get_current_user, get_optional_user
 from app.models.cart import Cart, CartItem
 from app.models.product import ProductVariant
-from app.models.discount import Discount
 from app.schemas.cart import AddCartItemRequest, UpdateCartItemRequest, ApplyDiscountRequest
 from app.models.user import User
+from app.services.discount_service import DiscountService
 from datetime import datetime, timezone, timedelta
 
 router = APIRouter(prefix="/cart", tags=["Cart"])
@@ -57,7 +57,12 @@ async def get_cart(
         })
         subtotal += price * item.quantity
 
-    return {"uuid": cart.uuid, "items": items, "subtotal": round(subtotal, 2)}
+    automatic = DiscountService(db).find_automatic(user, [
+        {"product_id": item.variant.product_id, "quantity": item.quantity, "price": float(item.variant.price)}
+        for item in cart.items if item.variant and item.variant.product
+    ], subtotal)
+    return {"uuid": cart.uuid, "items": items, "subtotal": round(subtotal, 2),
+            "automatic_discount": _discount_response(automatic) if automatic else None}
 
 
 @router.post("/items/", status_code=status.HTTP_201_CREATED)
@@ -142,17 +147,24 @@ async def apply_discount(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    from datetime import datetime, timezone
-    discount = db.query(Discount).filter(
-        Discount.code == payload.code.upper(),
-        Discount.status == "active",
-        Discount.starts_at <= datetime.now(timezone.utc),
-    ).first()
-    if not discount:
-        raise HTTPException(status_code=400, detail="Invalid or expired discount code.")
-    return {"valid": True, "code": discount.code, "discount_type": discount.discount_type, "value": str(discount.value)}
+    cart = db.query(Cart).filter(Cart.user_id == user.id).first()
+    if not cart or not cart.items:
+        raise HTTPException(status_code=400, detail="Cart is empty.")
+    items = [{"product_id": item.variant.product_id, "quantity": item.quantity, "price": float(item.variant.price)} for item in cart.items if item.variant and item.variant.product]
+    subtotal = sum(item["price"] * item["quantity"] for item in items)
+    try:
+        result = DiscountService(db).evaluate_code(payload.code, user, items, subtotal)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error))
+    return {"valid": True, **_discount_response(result)}
 
 
 @router.delete("/remove-discount")
 async def remove_discount(user: User = Depends(get_current_user)):
     return {"message": "Discount removed."}
+
+
+def _discount_response(result):
+    return {"code": result.discount.code, "title": result.discount.title,
+            "discount_type": result.discount.discount_type, "value": str(result.discount.value or 0),
+            "discount_amount": result.amount, "free_shipping": result.free_shipping}

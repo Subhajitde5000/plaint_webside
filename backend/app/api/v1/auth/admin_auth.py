@@ -5,9 +5,9 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.admin import AdminUser, AdminRefreshToken
-from app.schemas.auth import AdminLoginRequest, AdminLoginResponse, AdminUserResponse
+from app.schemas.auth import AdminLoginRequest, AdminLoginResponse, AdminUserResponse, AdminChangePasswordRequest
 from app.dependencies import get_current_admin
-from app.utils.security import verify_password, create_access_token, create_refresh_token, sha256_hash
+from app.utils.security import verify_password, create_access_token, create_refresh_token, sha256_hash, hash_password
 from app.config import settings
 
 router = APIRouter(prefix="/admin/auth", tags=["Auth — Admin"])
@@ -130,4 +130,19 @@ async def get_current_admin_profile(
         is_active=admin.is_active,
         avatar_url=admin.avatar_url,
     )
+
+
+@router.post("/change-password")
+async def change_password(
+    payload: AdminChangePasswordRequest,
+    admin: AdminUser = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    if not verify_password(payload.old_password, admin.password_hash):
+        raise HTTPException(status_code=400, detail="Invalid old password.")
+
+    admin.password_hash = hash_password(payload.new_password)
+    db.commit()
+    return {"message": "Password changed successfully."}
+
 

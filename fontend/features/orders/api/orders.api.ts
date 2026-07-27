@@ -57,3 +57,20 @@ export const returnOrderApi = async (
   const res = await api.post(`/orders/${orderUuid}/return`, payload);
   return res.data;
 };
+
+export const validateLoyaltyApi = async (
+  points: number,
+  subtotal: number,
+  discountCode?: string,
+  couponDiscountAmount: number = 0
+) => {
+  const res = await api.post("/orders/validate-loyalty", {
+    points,
+    subtotal,
+    discount_code: discountCode,
+    coupon_discount_amount: couponDiscountAmount,
+  });
+  return res.data;
+};
+
+

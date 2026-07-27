@@ -15,6 +15,8 @@ from app.models.discount import Discount, DiscountUsage
 from app.models.loyalty import LoyaltyAccount
 from app.schemas.order import CreateOrderRequest
 from app.models.user import User
+from app.services.discount_service import DiscountService
+from app.services.loyalty_service import LoyaltyService
 
 
 class OrderService:
@@ -80,34 +82,56 @@ class OrderService:
         discount_id = None
         discount_code = None
 
-        # 3. Apply discount code
+        # 3. Apply manual discount code or best automatic discount
+        discount_service = DiscountService(db)
+        discount_result = None
         if payload.discount_code:
-            discount = self._validate_discount(payload.discount_code, user, subtotal)
-            discount_amount = self._calculate_discount(discount, order_items_data, subtotal)
-            discount_id = discount.id
-            discount_code = payload.discount_code.upper()
+            try:
+                discount_result = discount_service.evaluate_code(payload.discount_code, user, self._discount_items(order_items_data), subtotal)
+            except ValueError as err:
+                raise ValueError(str(err))
+        else:
+            discount_result = discount_service.find_automatic(user, self._discount_items(order_items_data), subtotal)
+
+        if discount_result:
+            discount_amount = discount_result.amount
+            discount_id = discount_result.discount.id
+            discount_code = discount_result.discount.code or discount_result.discount.title or "AUTOMATIC"
 
         # 4. Loyalty points
         loyalty_discount = 0.00
         loyalty_points_used = 0
         if payload.loyalty_points_to_use and payload.loyalty_points_to_use > 0:
-            account = db.query(LoyaltyAccount).filter(
-                LoyaltyAccount.user_id == user.id
-            ).first()
-            if account:
-                points = min(payload.loyalty_points_to_use, account.points_balance)
-                loyalty_discount = round(points * 0.10, 2)   # 1 pt = ₹0.10
-                loyalty_points_used = points
+            loyalty_svc = LoyaltyService(db)
+            d_type = discount_result.discount.discount_type if (discount_result and discount_result.discount) else None
+            d_val = float(discount_result.discount.value or 0) if (discount_result and discount_result.discount and discount_result.discount.value) else None
+            d_code = discount_code
+
+            is_valid, msg, discount = loyalty_svc.validate_redemption(
+                user_id=user.id,
+                points=payload.loyalty_points_to_use,
+                subtotal=subtotal,
+                coupon_discount_amount=discount_amount,
+                discount_type=d_type,
+                discount_value=d_val,
+                discount_code=d_code,
+            )
+            if not is_valid:
+                raise ValueError(msg)
+
+            # Reserve points (Reserve, don't deduct yet!)
+            loyalty_svc.reserve_points(user.id, payload.loyalty_points_to_use)
+            loyalty_discount = discount
+            loyalty_points_used = payload.loyalty_points_to_use
+
 
         # 5. Shipping & Tax
         taxable = subtotal - discount_amount - loyalty_discount
         shipping = 0.00 if taxable >= 499 else 99.00
 
         # Check for free_shipping discount
-        if payload.discount_code and discount_id:
-            disc = db.query(Discount).filter(Discount.id == discount_id).first()
-            if disc and disc.discount_type == "free_shipping":
-                shipping = 0.00
+        if discount_result and discount_result.free_shipping:
+            shipping = 0.00
 
         tax = round(taxable * 0.18, 2)
         total = round(taxable + shipping + tax, 2)
@@ -134,6 +158,19 @@ class OrderService:
         )
         db.add(order)
         db.flush()  # get order.id
+
+        if loyalty_points_used > 0:
+            loyalty_svc.confirm_redeemed_points(user.id, loyalty_points_used, order)
+
+        if discount_result and discount_result.discount:
+
+            discount_result.discount.usage_count = (discount_result.discount.usage_count or 0) + 1
+            db.add(DiscountUsage(
+                discount_id=discount_result.discount.id,
+                user_id=user.id,
+                order_id=order.id,
+                discount_amount=discount_amount,
+            ))
 
         # 7. Create order items
         for item in order_items_data:
@@ -187,6 +224,10 @@ class OrderService:
         db.commit()
         db.refresh(order)
         return order
+
+    @staticmethod
+    def _discount_items(order_items_data: list[dict]) -> list[dict]:
+        return [{"product_id": item["variant"].product_id, "quantity": item["quantity"], "price": item["price"]} for item in order_items_data]
 
     def _validate_discount(
         self, code: str, user: User, subtotal: float

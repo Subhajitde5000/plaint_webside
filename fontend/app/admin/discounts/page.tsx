@@ -4,14 +4,14 @@ import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  MOCK_DISCOUNTS,
-  KPI_DATA,
   Discount,
   DiscountStatus,
   DiscountType,
   DiscountMethod,
   countByStatus,
 } from "./data";
+import { AdminDiscount } from "@/features/admin-discounts/api/admin-discounts.api";
+import { useAdminDiscounts, useDeactivateDiscount, useDeleteDiscount, useDuplicateDiscount } from "@/features/admin-discounts/hooks/useAdminDiscounts";
 
 /* ─── Design Tokens ─────────────────────────────────────────────────────────── */
 const T = {
@@ -153,6 +153,7 @@ function statusConfig(status: DiscountStatus) {
   if (status === "active")    return { label: "Active",    color: T.success, bg: T.successBg };
   if (status === "scheduled") return { label: "Scheduled", color: T.warning, bg: T.warningBg };
   if (status === "expired")   return { label: "Expired",   color: T.error,   bg: T.errorBg };
+  if (status === "paused")    return { label: "Paused",    color: T.warning, bg: T.warningBg };
   return                             { label: "Draft",     color: T.info,    bg: T.infoBg };
 }
 
@@ -164,6 +165,7 @@ const STATUS_TABS: { key: StatusTab; label: string }[] = [
   { key: "active",    label: "Active" },
   { key: "scheduled", label: "Scheduled" },
   { key: "expired",   label: "Expired" },
+  { key: "paused",    label: "Paused" },
   { key: "draft",     label: "Draft" },
 ];
 
@@ -177,6 +179,21 @@ const SORT_OPTIONS: { key: SortKey; label: string }[] = [
 ];
 
 const PAGE_SIZE = 10;
+
+function toUiDiscount(discount: AdminDiscount): Discount {
+  const typeMap = { percentage: "percentage", fixed_amount: "fixed", free_shipping: "shipping", bogo: "bogo" } as const;
+  const appliesToMap = { all: "all", specific_collections: "collections", specific_products: "products", specific_customers: "customers" } as const;
+  const eligibilityMap = { all: "all", specific_segments: "segments", specific_customers: "specific", loyalty_tier: "tiers", first_time: "all" } as const;
+  return { id: discount.uuid, code: discount.code || discount.title, title: discount.title, type: typeMap[discount.discount_type], method: discount.method,
+    value: Number(discount.value ?? 0), valueCap: discount.max_discount_amount ? Number(discount.max_discount_amount) : undefined,
+    status: discount.status, usedCount: discount.usage_count, usageLimit: discount.usage_limit_total ? Number(discount.usage_limit_total) : undefined,
+    minOrderAmount: discount.min_requirement_type === "amount" ? Number(discount.min_requirement_value) : undefined,
+    minQuantity: discount.min_requirement_type === "quantity" ? Number(discount.min_requirement_value) : undefined,
+    startDate: discount.starts_at, endDate: discount.ends_at ?? undefined, appliesTo: appliesToMap[discount.applies_to],
+    customerEligibility: eligibilityMap[discount.customer_eligibility], firstTimeOnly: Boolean(discount.first_time_only),
+    combinesWithProduct: Boolean(discount.combine_with_product), combinesWithOrder: Boolean(discount.combine_with_order), combinesWithShipping: Boolean(discount.combine_with_shipping),
+    createdAt: discount.created_at, createdBy: "Admin" };
+}
 
 /* ─── Sub-components ─────────────────────────────────────────────────────────── */
 
@@ -547,7 +564,6 @@ function Toast({ toast, onDismiss }: { toast: ToastData; onDismiss: (id: number)
 /* ─── Main Page ──────────────────────────────────────────────────────────────── */
 export default function AdminDiscountsPage() {
   const router = useRouter();
-  const [discounts, setDiscounts] = useState<Discount[]>(MOCK_DISCOUNTS);
   const [activeTab, setActiveTab] = useState<StatusTab>("all");
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("newest");
@@ -561,6 +577,18 @@ export default function AdminDiscountsPage() {
   const [toastId, setToastId] = useState(0);
   const searchRef = useRef<HTMLInputElement>(null);
   const sortRef = useRef<HTMLDivElement>(null);
+  const { data, isLoading, isError } = useAdminDiscounts({ status: activeTab, q: search || undefined, sort: sortKey, page: 1, pageSize: 100 });
+  const deleteDiscount = useDeleteDiscount();
+  const deactivateDiscount = useDeactivateDiscount();
+  const duplicateDiscount = useDuplicateDiscount();
+  const discounts = useMemo(() => (data?.items ?? []).map(toUiDiscount), [data]);
+  const kpiData = useMemo(() => [
+    { label: "Discounts in view", value: String(data?.total ?? 0), type: "normal", filterKey: activeTab },
+    { label: "Codes used in view", value: discounts.reduce((sum, discount) => sum + discount.usedCount, 0).toLocaleString("en-IN"), type: "normal", filterKey: activeTab },
+    { label: "Active in view", value: String(discounts.filter((discount) => discount.status === "active").length), type: "normal", filterKey: "active" },
+    { label: "Scheduled in view", value: String(discounts.filter((discount) => discount.status === "scheduled").length), type: "normal", filterKey: "scheduled" },
+    { label: "Paused in view", value: String(discounts.filter((discount) => discount.status === "paused").length), type: "warning", filterKey: "paused" },
+  ], [activeTab, data?.total, discounts]);
 
   // Focus search on mount
   useEffect(() => { searchRef.current?.focus(); }, []);
@@ -641,44 +669,32 @@ export default function AdminDiscountsPage() {
   };
 
   // Bulk actions
-  const bulkDeactivate = () => {
-    setDiscounts(prev => prev.map(d =>
-      selectedIds.has(d.id) && d.status === "active" ? { ...d, status: "draft" as DiscountStatus } : d
-    ));
+  const bulkDeactivate = async () => {
+    await Promise.all([...selectedIds].map((uuid) => deactivateDiscount.mutateAsync(uuid)));
     addToast(`${selectedIds.size} discount(s) deactivated.`, "info");
     setSelectedIds(new Set());
   };
 
-  const bulkDelete = () => {
-    setDiscounts(prev => prev.filter(d => !selectedIds.has(d.id)));
+  const bulkDelete = async () => {
+    await Promise.all([...selectedIds].map((uuid) => deleteDiscount.mutateAsync(uuid)));
     addToast(`${selectedIds.size} discount(s) deleted.`, "info");
     setSelectedIds(new Set());
   };
 
   // Individual actions
-  const handleDelete = (d: Discount) => {
-    setDiscounts(prev => prev.filter(x => x.id !== d.id));
+  const handleDelete = async (d: Discount) => {
+    await deleteDiscount.mutateAsync(d.id);
     addToast(`"${d.code}" was deleted.`, "info");
     setDeleteTarget(null);
   };
 
-  const handleDuplicate = (d: Discount, newCode: string, resetUsage: boolean, setAsDraft: boolean) => {
-    const newId = `dsc-${Date.now()}`;
-    setDiscounts(prev => [
-      {
-        ...d,
-        id: newId, code: newCode,
-        usedCount: resetUsage ? 0 : d.usedCount,
-        status: setAsDraft ? "draft" : d.status,
-        createdAt: new Date().toISOString(),
-      },
-      ...prev,
-    ]);
+  const handleDuplicate = async (d: Discount, newCode: string, _resetUsage: boolean, _setAsDraft: boolean) => {
+    await duplicateDiscount.mutateAsync({ uuid: d.id, newCode });
     addToast("Duplicate created as draft.", "success");
   };
 
-  const handleDeactivate = (d: Discount) => {
-    setDiscounts(prev => prev.map(x => x.id === d.id ? { ...x, status: "draft" } : x));
+  const handleDeactivate = async (d: Discount) => {
+    await deactivateDiscount.mutateAsync(d.id);
     addToast(`"${d.code}" has been deactivated.`, "info");
   };
 
@@ -738,23 +754,18 @@ export default function AdminDiscountsPage() {
 
         {/* ── KPI Row ── */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 16, marginBottom: 24 }}>
-          {KPI_DATA.map(kpi => (
+          {kpiData.map(kpi => (
             <button
               key={kpi.label}
               aria-label={`${kpi.label}: ${kpi.value}`}
               onClick={() => {
-                if (kpi.filterKey === "expiring") {
-                  setSortKey("expiring_soonest");
-                  setActiveTab("active");
-                } else {
-                  setActiveTab(kpi.filterKey as StatusTab);
-                }
+                setActiveTab(kpi.filterKey as StatusTab);
               }}
               style={{
                 background: T.card,
                 border: `1px solid ${T.borderMuted}`,
                 borderRadius: 8,
-                ...(kpi.label === "Expiring Soon (7 days)" ? { borderLeft: `3px solid ${T.warning}` } : {}),
+                ...(kpi.label === "Paused in view" ? { borderLeft: `3px solid ${T.warning}` } : {}),
                 padding: 20,
                 textAlign: "left", cursor: "pointer",
                 transition: "background 150ms",
@@ -782,7 +793,7 @@ export default function AdminDiscountsPage() {
           style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap" }}
         >
           {STATUS_TABS.map(tab => {
-            const count = tab.key === "all" ? counts.all : counts[tab.key as DiscountStatus] ?? 0;
+            const count = tab.key === "all" ? counts.all : counts[tab.key as keyof typeof counts] ?? 0;
             const isActive = activeTab === tab.key;
             return (
               <button

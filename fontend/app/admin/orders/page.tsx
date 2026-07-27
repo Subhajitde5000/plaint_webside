@@ -1043,7 +1043,9 @@ function OrderDetailPanel({
                 <div style={{ padding:"14px 18px", display:"flex", flexDirection:"column", gap:"6px" }}>
                   {[
                     { l: "Subtotal", v: `₹${parseFloat(order.subtotal).toLocaleString("en-IN")}` },
-                    { l: `Discount${order.discount_code ? ` (${order.discount_code})` : ""}`, v: `−₹${parseFloat(order.discount_amount).toLocaleString("en-IN")}`, c: T.delivered },
+                    ...(parseFloat(order.discount_amount) > 0
+                      ? [{ l: `Coupon${order.discount_code ? ` (${order.discount_code})` : " (Automatic)"}`, v: `−₹${parseFloat(order.discount_amount).toLocaleString("en-IN")}`, c: T.delivered }]
+                      : []),
                     { l: "Shipping", v: `₹${parseFloat(order.shipping_amount).toLocaleString("en-IN")}` },
                     { l: "Tax", v: `₹${parseFloat(order.tax_amount).toLocaleString("en-IN")}` }
                   ].map(r => (
@@ -1052,6 +1054,19 @@ function OrderDetailPanel({
                       <span style={{ fontSize:"12px", fontWeight:600, color:r.c||T.text }}>{r.v}</span>
                     </div>
                   ))}
+                  {(order.loyalty_points_used > 0) && (
+                    <div style={{ display:"flex", justifyContent:"space-between" }}>
+                      <span style={{ fontSize:"12px", color:T.textMuted, display:"flex", alignItems:"center", gap:4 }}>
+                        🟢 Green Points
+                        <span style={{ background:T.deliveredBg, color:T.delivered, padding:"1px 6px", borderRadius:4, fontSize:"10px", fontWeight:700 }}>
+                          {order.loyalty_points_used} pts
+                        </span>
+                      </span>
+                      <span style={{ fontSize:"12px", fontWeight:700, color:T.delivered }}>
+                        −₹{parseFloat(order.loyalty_discount_amount).toLocaleString("en-IN")}
+                      </span>
+                    </div>
+                  )}
                   <div style={{ height:"1px", background:T.border, margin:"4px 0" }} />
                   <div style={{ display:"flex", justifyContent:"space-between" }}>
                     <span style={{ fontSize:"15px", fontWeight:700, color:T.text }}>Total</span>
@@ -1178,7 +1193,9 @@ function OrderDetailPanel({
             <SideCard title="Order Summary">
               {[
                 { l: "Subtotal", v: `₹${parseFloat(order.subtotal).toLocaleString("en-IN")}` },
-                { l: `Discount${order.discount_code ? ` (${order.discount_code})` : ""}`, v: `−₹${parseFloat(order.discount_amount).toLocaleString("en-IN")}`, c: T.delivered },
+                ...(parseFloat(order.discount_amount) > 0
+                  ? [{ l: `Coupon${order.discount_code ? ` (${order.discount_code})` : " (Automatic)"}`, v: `−₹${parseFloat(order.discount_amount).toLocaleString("en-IN")}`, c: T.delivered }]
+                  : []),
                 { l: "Shipping", v: `₹${parseFloat(order.shipping_amount).toLocaleString("en-IN")}` },
                 { l: "Tax", v: `₹${parseFloat(order.tax_amount).toLocaleString("en-IN")}` }
               ].map(r=>(
@@ -1187,6 +1204,19 @@ function OrderDetailPanel({
                   <span style={{ color:r.c||T.text, fontWeight:600 }}>{r.v}</span>
                 </div>
               ))}
+              {(order.loyalty_points_used > 0) && (
+                <div style={{ display:"flex", justifyContent:"space-between", fontSize:"11px" }}>
+                  <span style={{ color:T.textMuted, display:"flex", alignItems:"center", gap:3 }}>
+                    🟢 Green Points
+                    <span style={{ background:T.deliveredBg, color:T.delivered, padding:"0px 5px", borderRadius:4, fontSize:"9px", fontWeight:700 }}>
+                      {order.loyalty_points_used} pts
+                    </span>
+                  </span>
+                  <span style={{ color:T.delivered, fontWeight:700 }}>
+                    −₹{parseFloat(order.loyalty_discount_amount).toLocaleString("en-IN")}
+                  </span>
+                </div>
+              )}
               <div style={{ height:"1px", background:T.border, margin:"6px 0" }} />
               <div style={{ display:"flex", justifyContent:"space-between" }}>
                 <span style={{ fontSize:"13px", fontWeight:700, color:T.text }}>Total</span>

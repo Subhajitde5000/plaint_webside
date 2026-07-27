@@ -20,13 +20,18 @@ class Review(Base):
     rating = Column(SmallInteger, nullable=False)
     title = Column(String(255))
     body = Column(Text)
+    video_url = Column(String(500))
     is_verified_purchase = Column(Boolean, default=False)
     is_featured = Column(Boolean, default=False)
+    is_edited = Column(Boolean, default=False)
+    edited_at = Column(DateTime)
     status = Column(
-        Enum("submitted", "pending", "published", "rejected", "flagged"),
+        Enum("submitted", "pending", "published", "rejected", "flagged", "hidden"),
         default="pending",
     )
     rejection_reason = Column(String(500))
+    spam_score = Column(SmallInteger, default=0)
+    ai_risk_level = Column(String(20), default="low")
     admin_reply = Column(Text)
     admin_reply_at = Column(DateTime)
     admin_reply_by = Column(BigInteger, ForeignKey("admin_users.id", ondelete="SET NULL"))
@@ -37,6 +42,7 @@ class Review(Base):
     moderated_at = Column(DateTime)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+    deleted_at = Column(DateTime)
 
     product = relationship("Product", back_populates="reviews")
     user = relationship("User", back_populates="reviews")
@@ -44,6 +50,7 @@ class Review(Base):
     photos = relationship("ReviewPhoto", back_populates="review", cascade="all, delete-orphan")
     flags = relationship("ReviewFlag", back_populates="review", cascade="all, delete-orphan")
     moderation_history = relationship("ReviewModerationHistory", back_populates="review", cascade="all, delete-orphan")
+    helpful_votes = relationship("ReviewHelpfulVote", back_populates="review", cascade="all, delete-orphan")
 
     __table_args__ = (
         Index("idx_product_id", "product_id"),
@@ -103,3 +110,21 @@ class ReviewModerationHistory(Base):
     created_at = Column(DateTime, server_default=func.now())
 
     review = relationship("Review", back_populates="moderation_history")
+
+
+class ReviewHelpfulVote(Base):
+    __tablename__ = "review_helpful_votes"
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    review_id = Column(BigInteger, ForeignKey("reviews.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    is_helpful = Column(Boolean, default=True)
+    created_at = Column(DateTime, server_default=func.now())
+
+    review = relationship("Review", back_populates="helpful_votes")
+    user = relationship("User")
+
+    __table_args__ = (
+        Index("idx_review_user", "review_id", "user_id", unique=True),
+    )
+
