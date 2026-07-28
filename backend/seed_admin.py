@@ -1,7 +1,7 @@
 """
-Script to seed demo admin user into the database.
+Script to seed or update admin user directly in the database.
 """
-import os
+import argparse
 import sys
 import uuid
 from pathlib import Path
@@ -10,99 +10,95 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-# Load .env file if present
-dotenv_path = PROJECT_ROOT / ".env"
-if dotenv_path.exists():
-    with open(dotenv_path, "r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if line and not line.startswith("#") and "=" in line:
-                key, value = line.split("=", 1)
-                os.environ.setdefault(key.strip(), value.strip())
-
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from app.config import settings
-from app.database import Base
+from app.database import SessionLocal
 from app.models.admin import AdminUser
 from app.utils.security import hash_password
 
-def get_db_session():
-    # Try configured database URL
-    db_urls_to_try = [
-        settings.DATABASE_URL,
-        os.environ.get("DATABASE_URL"),
-        "mysql+pymysql://root:1234@127.0.0.1:3306/plant_store",
-        "mysql+pymysql://root:root@localhost:3306/plant_store",
-        f"sqlite:///{PROJECT_ROOT / 'dev_plant_store.db'}",
-    ]
 
-    for url in db_urls_to_try:
-        if not url:
-            continue
-        try:
-            print(f"Connecting to database: {url.split('@')[-1] if '@' in url else url}")
-            connect_args = {"check_same_thread": False} if "sqlite" in url else {}
-            engine = create_engine(url, connect_args=connect_args)
-            conn = engine.connect()
-            conn.close()
-            Base.metadata.create_all(bind=engine)
-            Session = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-            return Session(), engine, url
-        except Exception as e:
-            print(f"  Connection attempt failed for {url.split('@')[-1] if '@' in url else url}: {e}")
-
-    raise RuntimeError("Could not connect to any database URL.")
-
-
-def seed_demo_admin():
-    email = "admin@plantcare.com"
-    password = "Admin123!"
-
-    print("--- Starting Demo Admin Seeding ---")
-    session, engine, active_url = get_db_session()
+def seed_or_update_admin(
+    email: str = "admin@plantcare.com",
+    password: str = "Admin123!",
+    first_name: str = "Admin",
+    last_name: str = "User",
+    role: str = "super_admin",
+):
+    print("--- Seeding/Updating Admin User ---")
+    db = SessionLocal()
 
     try:
-        existing = session.query(AdminUser).filter(AdminUser.email == email).first()
-        if existing:
-            print(f"Existing demo admin user '{email}' found. Updating password and active state...")
-            existing.password_hash = hash_password(password)
-            existing.is_active = True
-            existing.role = "super_admin"
-            existing.first_name = "Admin"
-            existing.last_name = "User"
-            session.commit()
-            print("Successfully updated demo admin user!")
+        existing_admin = db.query(AdminUser).filter(AdminUser.email == email).first()
+
+        if existing_admin:
+            print(f"Existing admin user '{email}' found. Updating password and details...")
+            existing_admin.password_hash = hash_password(password)
+            existing_admin.first_name = first_name
+            existing_admin.last_name = last_name
+            existing_admin.role = role
+            existing_admin.is_active = True
+            db.commit()
+            print("Successfully updated existing admin password and details!")
         else:
-            print(f"Creating new demo admin user '{email}'...")
-            admin = AdminUser(
+            print(f"Creating new admin user '{email}'...")
+            new_admin = AdminUser(
                 uuid=str(uuid.uuid4()),
                 email=email,
                 password_hash=hash_password(password),
-                first_name="Admin",
-                last_name="User",
-                role="super_admin",
+                first_name=first_name,
+                last_name=last_name,
+                role=role,
                 is_active=True,
             )
-            session.add(admin)
-            session.commit()
-            print("Successfully created demo admin user!")
+            db.add(new_admin)
+            db.commit()
+            print("Successfully added new admin user!")
 
         print("\n==============================================")
-        print("  DEMO ADMIN CREDENTIALS ADDED TO DATABASE")
+        print("  ADMIN CREDENTIALS SET IN DATABASE")
         print("==============================================")
-        print(f"  Email:    {email}")
-        print(f"  Password: {password}")
-        print(f"  Role:     super_admin")
-        print(f"  Database: {active_url.split('@')[-1] if '@' in active_url else active_url}")
+        print(f"  Email:      {email}")
+        print(f"  Password:   {password}")
+        print(f"  First Name: {first_name}")
+        print(f"  Last Name:  {last_name}")
+        print(f"  Role:       {role}")
         print("==============================================\n")
 
     except Exception as e:
-        print(f"Error seeding demo admin: {e}")
-        session.rollback()
+        print(f"An error occurred while seeding admin: {e}")
+        db.rollback()
     finally:
-        session.close()
+        db.close()
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Add or update admin user credentials directly.")
+    parser.add_argument("--email", default="admin@plantcare.com", help="Admin email address")
+    parser.add_argument("--password", default="Admin123!", help="Admin password")
+    parser.add_argument("--first-name", default="Admin", help="Admin first name")
+    parser.add_argument("--last-name", default="User", help="Admin last name")
+    parser.add_argument(
+        "--role",
+        default="super_admin",
+        choices=[
+            "super_admin",
+            "operations_manager",
+            "inventory_manager",
+            "customer_support",
+            "marketing",
+            "garden_services",
+            "analyst",
+        ],
+        help="Admin role (default: super_admin)",
+    )
+
+    args = parser.parse_args()
+    seed_or_update_admin(
+        email=args.email,
+        password=args.password,
+        first_name=args.first_name,
+        last_name=args.last_name,
+        role=args.role,
+    )
 
 
 if __name__ == "__main__":
-    seed_demo_admin()
+    main()
