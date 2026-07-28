@@ -1,5 +1,6 @@
 from pydantic_settings import BaseSettings
 from functools import lru_cache
+from pathlib import Path
 from typing import List, Union, Any
 
 class Settings(BaseSettings):
@@ -11,7 +12,13 @@ class Settings(BaseSettings):
     REFRESH_TOKEN_EXPIRE_DAYS: int = 30
 
     # Database
-    DATABASE_URL: str = "mysql+pymysql://hero_user:hero_password@localhost:3306/hero_plant_store"
+    # DATABASE_URL: str = "mysql+pymysql://root:1234@127.0.0.1:3306/plant_store"
+    DB_HOST: str = "gateway01.ap-southeast-1.prod.aws.tidbcloud.com"
+    DB_PORT: int = 4000
+    DB_USERNAME: str = "3AuTUnN3B2GJ5qZ.root"
+    DB_PASSWORD: str = "jrRsMJ2YtfpKPECU"
+    DB_DATABASE: str = "plant_store"
+    DB_CA: str = str(Path(__file__).resolve().parents[1] / "isrgrootx1.pem")
     DATABASE_POOL_SIZE: int = 10
     DATABASE_MAX_OVERFLOW: int = 20
     DATABASE_POOL_TIMEOUT: int = 30
